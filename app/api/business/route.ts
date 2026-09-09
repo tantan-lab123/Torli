@@ -1,0 +1,161 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getBusinesses, getBusinessBySlug, getBusinessById, updateBusiness } from "@/lib/db";
+import { validatePassword } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const slug = searchParams.get("slug");
+  const id = searchParams.get("id");
+
+  if (slug) {
+    const business = await getBusinessBySlug(slug);
+    if (!business) {
+      return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
+    }
+    return NextResponse.json(business);
+  }
+
+  if (id) {
+    const business = await getBusinessById(id);
+    if (!business) {
+      return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
+    }
+    return NextResponse.json(business);
+  }
+
+  const businesses = await getBusinesses();
+  return NextResponse.json(businesses);
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      name,
+      owner_phone,
+      owner_email,
+      password,
+      google_id,
+      working_hours,
+      slot_interval_minutes,
+      date_overrides,
+      pin,
+    } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "חסר מזהה עסק" }, { status: 400 });
+    }
+
+    if (password) {
+      const check = validatePassword(password);
+      if (!check.isValid) {
+        return NextResponse.json(
+          {
+            error:
+              "הסיסמה חייבת להכיל לפחות 8 תווים, אות גדולה, אות קטנה, ספרה ותו מיוחד (!@#$%^&* וכו')",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const updated = await updateBusiness(id, {
+      ...(name ? { name } : {}),
+      ...(owner_phone ? { owner_phone } : {}),
+      ...(owner_email ? { owner_email } : {}),
+      ...(password ? { password } : {}),
+      ...(google_id ? { google_id } : {}),
+      ...(working_hours ? { working_hours } : {}),
+      ...(slot_interval_minutes !== undefined
+        ? { slot_interval_minutes: Number(slot_interval_minutes) }
+        : {}),
+      ...(date_overrides !== undefined ? { date_overrides } : {}),
+      ...(pin ? { pin } : {}),
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Error updating business:", error);
+    return NextResponse.json(
+      { error: "שגיאה בעדכון פרטי העסק" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      name,
+      slug,
+      owner_phone,
+      owner_email,
+      password,
+      google_id,
+      category,
+      pin,
+      slot_interval_minutes,
+    } = body;
+
+    if (!name || !slug || !owner_phone) {
+      return NextResponse.json(
+        { error: "יש למלא שם עסק, מזהה קישור (סלאג) ומספר טלפון" },
+        { status: 400 }
+      );
+    }
+
+    // If password provided, ensure it satisfies strong password policy
+    if (password) {
+      const check = validatePassword(password);
+      if (!check.isValid) {
+        return NextResponse.json(
+          {
+            error:
+              "הסיסמה אינה עומדת בדרישות האבטחה: לפחות 8 תווים, אות גדולה, אות קטנה, ספרה ותו מיוחד",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Check if slug already exists
+    const existing = await getBusinessBySlug(slug);
+    if (existing) {
+      return NextResponse.json(
+        { error: "מזהה קישור (Slug) זה כבר תפוס במערכת. אנא בחר סיומת אחרת." },
+        { status: 409 }
+      );
+    }
+
+    const { createBusiness } = await import("@/lib/db");
+    const newBusiness = await createBusiness({
+      name,
+      slug,
+      owner_phone,
+      owner_email,
+      password,
+      google_id,
+      category,
+      pin: pin || "1234",
+      slot_interval_minutes: slot_interval_minutes
+        ? Number(slot_interval_minutes)
+        : undefined,
+    });
+
+    return NextResponse.json({ success: true, business: newBusiness });
+  } catch (error) {
+    console.error("Error creating business:", error);
+    return NextResponse.json(
+      { error: "שגיאה ביצירת עסק חדש" },
+      { status: 500 }
+    );
+  }
+}
