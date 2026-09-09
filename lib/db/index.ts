@@ -94,20 +94,21 @@ export async function loginBusiness(
     | string
     | {
         phone?: string;
+        password?: string;
         pinOrPassword?: string;
         googleId?: string;
         email?: string;
       },
-  legacyPin?: string
+  legacyParam?: string
 ): Promise<Business | null> {
   const phone =
     typeof phoneOrCredentials === "string"
       ? phoneOrCredentials
       : phoneOrCredentials.phone;
-  const pinOrPassword =
+  const password =
     typeof phoneOrCredentials === "string"
-      ? legacyPin
-      : phoneOrCredentials.pinOrPassword;
+      ? legacyParam
+      : phoneOrCredentials.password || phoneOrCredentials.pinOrPassword;
   const googleId =
     typeof phoneOrCredentials === "object"
       ? phoneOrCredentials.googleId
@@ -119,39 +120,47 @@ export async function loginBusiness(
 
   // Handle Google Login
   if (googleId || email) {
+    if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+      const client = supabaseAdmin || supabase!;
+      if (email) {
+        const { data } = await client
+          .from("businesses")
+          .select("*")
+          .ilike("owner_email", email.trim())
+          .maybeSingle();
+        if (data) return data as Business;
+      }
+      if (googleId) {
+        const { data } = await client
+          .from("businesses")
+          .select("*")
+          .eq("google_id", googleId)
+          .maybeSingle();
+        if (data) return data as Business;
+      }
+    }
+
     const foundByGoogle = db.businesses.find(
       (b) =>
         (googleId && b.google_id === googleId) ||
         (email && b.owner_email?.toLowerCase() === email.toLowerCase())
     );
     if (foundByGoogle) return foundByGoogle;
-
-    // For demo/onboarding convenience: if logged in with Google and exists in local demo set
-    const matchByEmailOrFirst = db.businesses.find(
-      (b) => email && b.owner_email?.toLowerCase() === email.toLowerCase()
-    ) || db.businesses[0];
-    if (matchByEmailOrFirst) {
-      if (email) matchByEmailOrFirst.owner_email = email;
-      if (googleId) matchByEmailOrFirst.google_id = googleId;
-      return matchByEmailOrFirst;
-    }
   }
 
-  if (!phone) return null;
+  if (!phone || !password) return null;
   const normalizedPhone = phone.replace(/\D/g, "");
 
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+    const client = supabaseAdmin || supabase!;
+    const { data, error } = await client
       .from("businesses")
       .select("*")
       .eq("owner_phone", normalizedPhone)
       .maybeSingle();
     if (!error && data) {
-      if (
-        (data.password && data.password === pinOrPassword) ||
-        (data.pin || "1234") === pinOrPassword ||
-        pinOrPassword === "1234"
-      ) {
+      // ONLY password allowed (PIN is canceled)
+      if (data.password && data.password === password) {
         return data as Business;
       }
     }
@@ -162,11 +171,7 @@ export async function loginBusiness(
   );
 
   if (found) {
-    if (
-      (found.password && found.password === pinOrPassword) ||
-      (found.pin || "1234") === pinOrPassword ||
-      pinOrPassword === "1234"
-    ) {
+    if (found.password && found.password === password) {
       return found;
     }
   }
@@ -260,12 +265,17 @@ export async function createBusiness(input: {
         name: newBusiness.name,
         slug: newBusiness.slug,
         owner_phone: newBusiness.owner_phone,
+        owner_email: newBusiness.owner_email || null,
+        password: newBusiness.password || null,
+        google_id: newBusiness.google_id || null,
         working_hours: newBusiness.working_hours,
       })
       .select()
       .single();
     if (!error && data) {
       newBusiness.id = data.id;
+    } else if (error) {
+      console.error("Error creating business in Supabase:", error);
     }
   }
 

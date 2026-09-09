@@ -101,13 +101,20 @@ export async function POST(request: NextRequest) {
       password,
       google_id,
       category,
-      pin,
       slot_interval_minutes,
     } = body;
 
     if (!name || !slug || !owner_phone) {
       return NextResponse.json(
         { error: "יש למלא שם עסק, מזהה קישור (סלאג) ומספר טלפון" },
+        { status: 400 }
+      );
+    }
+
+    // Enforce password if not signing up via Google
+    if (!password && !google_id) {
+      return NextResponse.json(
+        { error: "יש להגדיר סיסמה מאובטחת או להתחבר באמצעות חשבון Google" },
         { status: 400 }
       );
     }
@@ -144,7 +151,6 @@ export async function POST(request: NextRequest) {
       password,
       google_id,
       category,
-      pin: pin || "1234",
       slot_interval_minutes: slot_interval_minutes
         ? Number(slot_interval_minutes)
         : undefined,

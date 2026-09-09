@@ -49,12 +49,16 @@ async function handleReminders(request: NextRequest) {
       const businessName = business?.name || "בית העסק";
       const serviceName = service?.name || "טיפול";
 
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://schedule.app");
+
       // Formulate WhatsApp message in Hebrew
       const message =
         `היי ${client.first_name}! 🌟\n` +
         `תזכורת לתור שלך ל${serviceName} ב${businessName}.\n` +
         `🗓 מועד: ${dateText} בשעה ${timeText}.\n` +
-        `לביטול או שינוי: ${process.env.NEXT_PUBLIC_APP_URL || "https://schedule.app"}/cancel/${app.id}\n` +
+        `לביטול או שינוי: ${baseUrl}/cancel/${app.id}\n` +
         `נשמח לראותך!`;
 
       // Log simulated WhatsApp gateway payload

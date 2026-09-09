@@ -51,6 +51,7 @@ import {
   cn,
   validatePassword,
 } from "@/lib/utils";
+import { supabase } from "@/lib/db/supabase";
 import {
   addDays,
   subDays,
@@ -100,7 +101,6 @@ export default function AdminDashboardPage() {
   const [authTab, setAuthTab] = useState<"login" | "register">("login");
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginPin, setLoginPin] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -110,7 +110,6 @@ export default function AdminDashboardPage() {
   const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
-  const regPin = "1234";
   const [regInterval, setRegInterval] = useState("15");
   const [regCategory, setRegCategory] = useState<"barber" | "nails" | "therapy" | "general">("barber");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -188,6 +187,52 @@ export default function AdminDashboardPage() {
     restoreSession();
   }, []);
 
+  // Listen for Supabase OAuth return (e.g. Google Sign-In)
+  useEffect(() => {
+    if (!supabase) return;
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user?.email && !selectedBusiness) {
+          try {
+            setIsLoggingIn(true);
+            const res = await fetch("/api/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                provider: "google",
+                email: session.user.email,
+                googleId: session.user.id,
+              }),
+            });
+
+            const data = await res.json();
+            if (res.ok && data.business) {
+              setSelectedBusiness(data.business);
+              setEditingWorkingHours(data.business.working_hours);
+              setEditingInterval(data.business.slot_interval_minutes || 15);
+              setEditingOverrides(data.business.date_overrides || []);
+              localStorage.setItem(ADMIN_SESSION_KEY, data.business.slug);
+              triggerHaptic(45);
+            } else {
+              setLoginError(
+                `התחברת בהצלחה עם Google (${session.user.email}), אך כתובת מייל זו אינה מקושרת לעסק קיים. אנא הירשם בלשונית 'פתיחת עסק חדש' עם כתובת מייל זו.`
+              );
+            }
+          } catch (e) {
+            console.error("Google login check error:", e);
+          } finally {
+            setIsLoggingIn(false);
+          }
+        }
+      }
+    );
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, [selectedBusiness]);
+
   // Handle Private Owner Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,7 +240,11 @@ export default function AdminDashboardPage() {
     setIsLoggingIn(true);
     triggerHaptic(20);
 
-    const credentialKey = loginPassword.trim() || loginPin.trim();
+    if (!loginPhone.trim() || !loginPassword.trim()) {
+      setLoginError("יש להזין מספר טלפון וסיסמה");
+      setIsLoggingIn(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -203,8 +252,7 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: loginPhone.trim(),
-          password: credentialKey,
-          pin: credentialKey,
+          password: loginPassword.trim(),
         }),
       });
 
@@ -238,46 +286,54 @@ export default function AdminDashboardPage() {
     triggerHaptic(20);
 
     try {
-      // In web app / demo environment, initiate Google OAuth exchange
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: "google",
-          email: "dan@barber-dan.co.il",
-          googleId: "google-owner-dan",
-          name: "Daniel Owner",
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setLoginError(data.error || "שגיאה בהתחברות עם חשבון Google");
+      if (!supabase) {
+        setLoginError("חיבור Supabase אינו מוגדר בסביבה זו.");
         setIsLoggingIn(false);
         return;
       }
 
-      const biz: Business = data.business;
-      setSelectedBusiness(biz);
-      setEditingWorkingHours(biz.working_hours);
-      setEditingInterval(biz.slot_interval_minutes || 15);
-      setEditingOverrides(biz.date_overrides || []);
-      localStorage.setItem(ADMIN_SESSION_KEY, biz.slug);
-      triggerHaptic(45);
+      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/admin` : undefined;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) {
+        if (
+          error.message?.toLowerCase().includes("not enabled") ||
+          error.message?.toLowerCase().includes("unsupported") ||
+          error.message?.toLowerCase().includes("disabled")
+        ) {
+          setLoginError(
+            "ספק Google טרם הופעל בלוח הבקרה של Supabase. יש להפעיל את Google ב-Authentication -> Providers (הסבר מלא זמין במדריך)."
+          );
+        } else {
+          setLoginError(error.message || "שגיאה בהתחברות עם Google");
+        }
+        setIsLoggingIn(false);
+      }
     } catch (err) {
       console.error(err);
       setLoginError("שגיאת תקשורת בהתחברות Google");
-    } finally {
       setIsLoggingIn(false);
     }
   };
 
   // Handle Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setSelectedBusiness(null);
     localStorage.removeItem(ADMIN_SESSION_KEY);
-    setLoginPin("");
     setLoginPassword("");
+    if (supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
+    }
     triggerHaptic(25);
   };
 
@@ -304,13 +360,13 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (regPassword) {
-      if (!passwordValidation.isValid) {
-        setRegError("הסיסמה אינה עומדת בכל 5 כללי האבטחה הנדרשים");
-        return;
-      }
-    } else if (!regPin.trim()) {
-      setRegError("יש להגדיר סיסמה מאובטחת או קוד PIN");
+    if (!regPassword.trim()) {
+      setRegError("יש להגדיר סיסמה מאובטחת לבעל העסק");
+      return;
+    }
+
+    if (!passwordValidation.isValid) {
+      setRegError("הסיסמה אינה עומדת בכל 5 כללי האבטחה הנדרשים");
       return;
     }
 
@@ -324,8 +380,7 @@ export default function AdminDashboardPage() {
           slug: regSlug.trim(),
           owner_phone: regPhone.trim(),
           owner_email: regEmail.trim() || undefined,
-          password: regPassword.trim() || undefined,
-          pin: regPin.trim() || "1234",
+          password: regPassword.trim(),
           slot_interval_minutes: Number(regInterval),
           category: regCategory,
         }),
@@ -995,17 +1050,14 @@ export default function AdminDashboardPage() {
                 />
 
                 <Input
-                  label="סיסמה אישית (או קוד PIN) *"
+                  label="סיסמה אישית *"
                   type="password"
-                  placeholder="הזן סיסמה או PIN"
+                  placeholder="הזן סיסמה מאובטחת"
                   dir="ltr"
                   className="text-right font-medium text-base"
-                  value={loginPassword || loginPin}
-                  onChange={(e) => {
-                    setLoginPassword(e.target.value);
-                    setLoginPin(e.target.value);
-                  }}
-                  helperText="הזן סיסמה חזקה, או PIN (ברירת מחדל להדגמה: 1234)"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  helperText="הזן את הסיסמה האישית שהוגדרה בעת הרישום"
                   required
                 />
 
@@ -1023,9 +1075,9 @@ export default function AdminDashboardPage() {
               {/* Quick demo helper banner */}
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs text-slate-500 space-y-1 text-right">
                 <span className="font-bold text-slate-700 block">עסקי הדגמה מוכנים מראש:</span>
-                <div>• מספרת דניאל: טלפון <span className="font-mono font-bold text-slate-800">0541234567</span> | סיסמה: <span className="font-mono font-bold text-slate-800">BarberDan2026!</span> (או PIN 1234)</div>
-                <div>• סטודיו מיה: טלפון <span className="font-mono font-bold text-slate-800">0529876543</span> | סיסמה: <span className="font-mono font-bold text-slate-800">MayaNails2026!</span> (או PIN 1234)</div>
-                <div>• קליניקת רפאל: טלפון <span className="font-mono font-bold text-slate-800">0505556677</span> | סיסמה: <span className="font-mono font-bold text-slate-800">RafaelClinic2026!</span> (או PIN 1234)</div>
+                <div>• מספרת דניאל: טלפון <span className="font-mono font-bold text-slate-800">0541234567</span> | סיסמה: <span className="font-mono font-bold text-slate-800">BarberDan2026!</span></div>
+                <div>• סטודיו מיה: טלפון <span className="font-mono font-bold text-slate-800">0529876543</span> | סיסמה: <span className="font-mono font-bold text-slate-800">MayaNails2026!</span></div>
+                <div>• קליניקת רפאל: טלפון <span className="font-mono font-bold text-slate-800">0505556677</span> | סיסמה: <span className="font-mono font-bold text-slate-800">RafaelClinic2026!</span></div>
               </div>
             </Card>
           )}

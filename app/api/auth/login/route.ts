@@ -35,11 +35,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Credentials login (phone + password or legacy pin)
-    const { phone, password, pin } = body;
-    const credentialKey = password || pin;
+    // Credentials login (phone + password)
+    const { phone, password } = body;
 
-    if (!phone || !credentialKey) {
+    if (!phone || !password) {
       return NextResponse.json(
         { error: "יש להזין מספר טלפון וסיסמה" },
         { status: 400 }
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     const business = await loginBusiness({
       phone,
-      pinOrPassword: credentialKey,
+      pinOrPassword: password,
     });
 
     if (!business) {
