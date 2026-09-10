@@ -148,6 +148,11 @@ export default function AdminDashboardPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [googleUser, setGoogleUser] = useState<{
+    email: string;
+    id: string;
+    name?: string;
+  } | null>(null);
 
   // New Business Registration Form
   const [regName, setRegName] = useState("");
@@ -245,9 +250,23 @@ export default function AdminDashboardPage() {
               localStorage.setItem(ADMIN_SESSION_KEY, data.business.slug);
               triggerHaptic(45);
             } else {
-              setLoginError(
-                `התחברת בהצלחה עם Google (${session.user.email}), אך כתובת מייל זו אינה מקושרת לעסק קיים. אנא הירשם בלשונית 'פתיחת עסק חדש' עם כתובת מייל זו.`
-              );
+              // User signed in with Google, but hasn't created their business yet!
+              const gUser = {
+                email: session.user.email,
+                id: session.user.id,
+                name:
+                  (session.user.user_metadata?.full_name as string) ||
+                  (session.user.user_metadata?.name as string) ||
+                  "",
+              };
+              setGoogleUser(gUser);
+              setAuthTab("register");
+              setRegEmail(session.user.email);
+              if (gUser.name) {
+                setRegName((prev) => prev || `עסק ${gUser.name}`);
+              }
+              setRegSlug((prev) => prev || generateRandomSlug(6));
+              setLoginError("");
             }
           } catch (e) {
             console.error("Google login check error:", e);
@@ -355,6 +374,7 @@ export default function AdminDashboardPage() {
   // Handle Logout
   const handleLogout = async () => {
     setSelectedBusiness(null);
+    setGoogleUser(null);
     localStorage.removeItem(ADMIN_SESSION_KEY);
     setLoginPassword("");
     if (supabase) {
@@ -385,14 +405,16 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (!regPassword.trim()) {
-      setRegError("יש להגדיר סיסמה מאובטחת לבעל העסק");
-      return;
-    }
+    if (!googleUser) {
+      if (!regPassword.trim()) {
+        setRegError("יש להגדיר סיסמה מאובטחת לבעל העסק");
+        return;
+      }
 
-    if (!passwordValidation.isValid) {
-      setRegError("הסיסמה אינה עומדת בכל 5 כללי האבטחה הנדרשים");
-      return;
+      if (!passwordValidation.isValid) {
+        setRegError("הסיסמה אינה עומדת בכל 5 כללי האבטחה הנדרשים");
+        return;
+      }
     }
 
     setIsRegistering(true);
@@ -404,8 +426,9 @@ export default function AdminDashboardPage() {
           name: regName.trim(),
           slug: regSlug.trim(),
           owner_phone: regPhone.trim(),
-          owner_email: regEmail.trim() || undefined,
-          password: regPassword.trim(),
+          owner_email: (googleUser ? googleUser.email : regEmail.trim()) || undefined,
+          password: googleUser ? undefined : regPassword.trim(),
+          google_id: googleUser ? googleUser.id : undefined,
           slot_interval_minutes: Number(regInterval),
           category: regCategory,
         }),
@@ -977,29 +1000,61 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* 1-Tap Google Registration */}
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={handleGoogleOwnerLogin}
-                isLoading={isLoggingIn}
-                className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-bold shadow-xs py-3"
-              >
-                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.94 0 12s.45 3.84 1.25 5.42l4.03-3.15z"/>
-                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                </svg>
-                <span>הרשמה מהירה באמצעות Google</span>
-              </Button>
+              {/* 1-Tap Google Registration / Connected Status */}
+              {googleUser ? (
+                <div className="p-4 rounded-2xl bg-gradient-to-l from-emerald-50 to-teal-50 border border-emerald-200 text-right space-y-2.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                        <Check className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-emerald-950 block">מחובר באמצעות Google</span>
+                        <span className="text-xs text-emerald-700 font-mono">{googleUser.email}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (supabase) await supabase.auth.signOut();
+                        setGoogleUser(null);
+                        setLoginError("");
+                      }}
+                      className="text-xs text-emerald-800 hover:text-emerald-950 font-bold underline px-2 py-1 rounded hover:bg-emerald-100/60 transition-colors"
+                    >
+                      החלף חשבון
+                    </button>
+                  </div>
+                  <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+                    חשבון Google אומת בהצלחה! נשאר רק לתת שם לעסק ומספר טלפון כדי לפתוח את היומן שלך מיד (ללא צורך בסיסמה).
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={handleGoogleOwnerLogin}
+                    isLoading={isLoggingIn}
+                    className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-slate-50 border-slate-300 text-slate-700 font-bold shadow-xs py-3"
+                  >
+                    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                      <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.94 0 12s.45 3.84 1.25 5.42l4.03-3.15z"/>
+                      <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                    </svg>
+                    <span>הרשמה מהירה באמצעות Google</span>
+                  </Button>
 
-              <div className="relative flex py-1 items-center justify-center">
-                <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-3 text-slate-400 text-xs font-medium">או מלא את פרטי העסק והסיסמה</span>
-                <div className="flex-grow border-t border-slate-200"></div>
-              </div>
+                  <div className="relative flex py-1 items-center justify-center">
+                    <div className="flex-grow border-t border-slate-200"></div>
+                    <span className="flex-shrink mx-3 text-slate-400 text-xs font-medium">או מלא את פרטי העסק והסיסמה</span>
+                    <div className="flex-grow border-t border-slate-200"></div>
+                  </div>
+                </>
+              )}
 
               <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-right">
                 <Input
@@ -1064,66 +1119,76 @@ export default function AdminDashboardPage() {
                     type="email"
                     placeholder="owner@example.com"
                     dir="ltr"
-                    value={regEmail}
+                    value={googleUser ? googleUser.email : regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
+                    disabled={!!googleUser}
                   />
                 </div>
 
-                {/* Password field with Live Security Requirements Checklist */}
-                <div className="space-y-1.5">
-                  <Input
-                    label="סיסמה מאובטחת לבעל העסק *"
-                    type="password"
-                    placeholder="לדוגמה: Barber2026!"
-                    dir="ltr"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    required
-                  />
+                {/* Password field or Google Security Confirmation */}
+                {!googleUser ? (
+                  <div className="space-y-1.5">
+                    <Input
+                      label="סיסמה מאובטחת לבעל העסק *"
+                      type="password"
+                      placeholder="לדוגמה: Barber2026!"
+                      dir="ltr"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      required
+                    />
 
-                  {/* Real-Time Visual Security Checklist */}
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1.5 text-right">
-                    <span className="font-bold text-slate-700 block text-[11px]">
-                      כללי אבטחה לסיסמה:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
-                      <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasMinLength ? "text-emerald-700 font-bold" : "text-slate-500")}>
-                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasMinLength ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
-                          {passwordValidation.hasMinLength ? <Check className="w-3 h-3" /> : "•"}
+                    {/* Real-Time Visual Security Checklist */}
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1.5 text-right">
+                      <span className="font-bold text-slate-700 block text-[11px]">
+                        כללי אבטחה לסיסמה:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                        <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasMinLength ? "text-emerald-700 font-bold" : "text-slate-500")}>
+                          <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasMinLength ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
+                            {passwordValidation.hasMinLength ? <Check className="w-3 h-3" /> : "•"}
+                          </div>
+                          <span>לפחות 8 תווים</span>
                         </div>
-                        <span>לפחות 8 תווים</span>
-                      </div>
 
-                      <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasUpper ? "text-emerald-700 font-bold" : "text-slate-500")}>
-                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasUpper ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
-                          {passwordValidation.hasUpper ? <Check className="w-3 h-3" /> : "•"}
+                        <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasUpper ? "text-emerald-700 font-bold" : "text-slate-500")}>
+                          <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasUpper ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
+                            {passwordValidation.hasUpper ? <Check className="w-3 h-3" /> : "•"}
+                          </div>
+                          <span>אות גדולה באנגלית (A-Z)</span>
                         </div>
-                        <span>אות גדולה באנגלית (A-Z)</span>
-                      </div>
 
-                      <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasLower ? "text-emerald-700 font-bold" : "text-slate-500")}>
-                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasLower ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
-                          {passwordValidation.hasLower ? <Check className="w-3 h-3" /> : "•"}
+                        <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasLower ? "text-emerald-700 font-bold" : "text-slate-500")}>
+                          <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasLower ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
+                            {passwordValidation.hasLower ? <Check className="w-3 h-3" /> : "•"}
+                          </div>
+                          <span>אות קטנה באנגלית (a-z)</span>
                         </div>
-                        <span>אות קטנה באנגלית (a-z)</span>
-                      </div>
 
-                      <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasNumber ? "text-emerald-700 font-bold" : "text-slate-500")}>
-                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasNumber ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
-                          {passwordValidation.hasNumber ? <Check className="w-3 h-3" /> : "•"}
+                        <div className={cn("flex items-center gap-1.5 transition-colors", passwordValidation.hasNumber ? "text-emerald-700 font-bold" : "text-slate-500")}>
+                          <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasNumber ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
+                            {passwordValidation.hasNumber ? <Check className="w-3 h-3" /> : "•"}
+                          </div>
+                          <span>ספרה (0-9)</span>
                         </div>
-                        <span>ספרה (0-9)</span>
-                      </div>
 
-                      <div className={cn("flex items-center gap-1.5 transition-colors sm:col-span-2", passwordValidation.hasSpecial ? "text-emerald-700 font-bold" : "text-slate-500")}>
-                        <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasSpecial ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
-                          {passwordValidation.hasSpecial ? <Check className="w-3 h-3" /> : "•"}
+                        <div className={cn("flex items-center gap-1.5 transition-colors sm:col-span-2", passwordValidation.hasSpecial ? "text-emerald-700 font-bold" : "text-slate-500")}>
+                          <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", passwordValidation.hasSpecial ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-400")}>
+                            {passwordValidation.hasSpecial ? <Check className="w-3 h-3" /> : "•"}
+                          </div>
+                          <span>{"תו מיוחד (!@#$%^&*()_+-=[]{};':\"|,.<>/?) "}</span>
                         </div>
-                        <span>{"תו מיוחד (!@#$%^&*()_+-=[]{};':\"|,.<>/?) "}</span>
                       </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900 flex items-center gap-2.5 text-right">
+                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 text-[10px]">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                    <span>חשבונך מאובטח אוטומטית באמצעות Google — אין צורך ביצירת סיסמה נוספת.</span>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">
@@ -1162,11 +1227,15 @@ export default function AdminDashboardPage() {
                   type="submit"
                   size="lg"
                   isLoading={isRegistering}
-                  disabled={regPassword.length > 0 && !passwordValidation.isValid}
-                  className="w-full mt-2"
+                  disabled={!googleUser && regPassword.length > 0 && !passwordValidation.isValid}
+                  className="w-full mt-2 shadow-md shadow-indigo-600/20"
                 >
                   <Sparkles className="w-4 h-4 ml-2" />
-                  <span>פתח עסק וכנס ישירות ליומן</span>
+                  <span>
+                    {googleUser
+                      ? "פתח את היומן שלי עכשיו 🚀"
+                      : "פתח עסק וכנס ישירות ליומן"}
+                  </span>
                 </Button>
               </form>
             </Card>
