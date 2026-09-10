@@ -14,6 +14,7 @@ import {
   CalendarPlus,
   AlertCircle,
   ExternalLink,
+  MessageCircle,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Business, Service, TimeSlot, Appointment } from "@/lib/types";
@@ -32,6 +33,7 @@ import {
   getJewishHolidayOrShabbat,
   getHebrewDayLetter,
   validatePhoneNumber,
+  toInternationalPhone,
 } from "@/lib/utils";
 import {
   addMonths,
@@ -1230,6 +1232,19 @@ export default function BookingPage() {
               </div>
             </Card>
 
+            {/* Custom Post-Booking Instructions / Arrival Guidelines from Owner */}
+            {business?.settings?.post_booking_message && (
+              <Card className="p-4 bg-gradient-to-r from-amber-50/90 to-orange-50/80 border border-amber-200/90 rounded-3xl text-right space-y-1.5 shadow-2xs">
+                <div className="flex items-center gap-2 text-amber-950 font-bold text-xs">
+                  <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>הנחיות ודגשים חשובים מבית העסק:</span>
+                </div>
+                <p className="text-xs text-amber-900 leading-relaxed whitespace-pre-line font-medium pr-1">
+                  {business.settings.post_booking_message}
+                </p>
+              </Card>
+            )}
+
             {/* Instant Digital Payment Options (Bit & PayBox) */}
             {(business?.settings?.bit_payment_url || business?.settings?.paybox_payment_url) && (
               <Card className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/80 to-purple-50/80 border border-indigo-200/80 rounded-3xl shadow-sm text-right space-y-2.5">
@@ -1276,7 +1291,7 @@ export default function BookingPage() {
               </Card>
             )}
 
-            {/* Action Buttons: Add to Google Calendar & Apple/ICS */}
+            {/* Action Buttons: Add to Google Calendar & Apple/ICS & WhatsApp */}
             <div className="space-y-2.5">
               <a
                 href={generateGoogleCalendarUrl({
@@ -1308,6 +1323,28 @@ export default function BookingPage() {
                 <CalendarIcon className="w-4 h-4 text-slate-500" />
                 <span>הורד קובץ יומן (Apple / Outlook)</span>
               </a>
+
+              {/* Direct WhatsApp Chat with Business Owner */}
+              {(business?.settings?.whatsapp_phone || business?.owner_phone) && (
+                <a
+                  href={`https://wa.me/${toInternationalPhone(
+                    business.settings?.whatsapp_phone || business.owner_phone
+                  )}?text=${encodeURIComponent(
+                    `היי, קבעתי תור ל${
+                      confirmedAppointment.service?.name || selectedService?.name
+                    } ב-${formatHebrewDate(confirmedAppointment.start_time)} בשעה ${format(
+                      new Date(confirmedAppointment.start_time),
+                      "HH:mm"
+                    )} עבור ${firstName} ${lastName}. יש לי שאלה לגבי התור:`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>יש לך שאלה? פתח וואטסאפ מול בית העסק</span>
+                </a>
+              )}
             </div>
 
             {/* Unique Cancellation Link as Required */}

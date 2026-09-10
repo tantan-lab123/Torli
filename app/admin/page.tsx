@@ -23,6 +23,11 @@ import {
   Check,
   History,
   Dices,
+  Volume2,
+  VolumeX,
+  Bell,
+  BellOff,
+  X,
 } from "lucide-react";
 import {
   Business,
@@ -94,12 +99,67 @@ import {
 
 const ADMIN_SESSION_KEY = "schedule_active_business_slug_v2";
 
+/**
+ * Pleasant Web Audio API double-tone notification chime for new bookings
+ */
+function playNotificationChime() {
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // Harmonic Tone 1 (D5 ~587Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.18, now);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    // Harmonic Tone 2 (A5 ~880Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(880, now + 0.12);
+    gain2.gain.setValueAtTime(0.22, now + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.55);
+  } catch (e) {
+    console.log("Audio chime error:", e);
+  }
+}
+
 export default function AdminDashboardPage() {
   // Businesses & active business
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Sound & Live New Booking Notification
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("torli_admin_sound") !== "false";
+  });
+  const [newBookingBanner, setNewBookingBanner] = useState<{
+    id: string;
+    clientName: string;
+    serviceName: string;
+    time: string;
+  } | null>(null);
+
+  const knownAppointmentIdsRef = React.useRef<Set<string>>(new Set());
+  const isInitialLoadRef = React.useRef(true);
 
   // Active TopBar Tab (11 core areas)
   const [activeTab, setActiveTab] = useState<AdminTab>("calendar");
@@ -516,32 +576,74 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Load services & appointments for selected business
-  const fetchAppointments = useCallback(async () => {
-    if (!selectedBusiness) return;
-    try {
-      const aRes = await fetch(`/api/appointments?business_id=${selectedBusiness.id}`);
-      if (aRes.ok) {
-        const aList = await aRes.json();
-        setAppointments(aList);
-      }
-      const sRes = await fetch(`/api/services?business_id=${selectedBusiness.id}`);
-      if (sRes.ok) {
-        const sList = await sRes.json();
-        setServices(sList);
-        if (sList.length > 0) {
-          setWalkinServiceId(sList[0].id);
+  // Load services & appointments for selected business with polling detection
+  const fetchAppointments = useCallback(
+    async (isPolling = false) => {
+      if (!selectedBusiness) return;
+      try {
+        const aRes = await fetch(`/api/appointments?business_id=${selectedBusiness.id}`);
+        if (aRes.ok) {
+          const aList: Appointment[] = await aRes.json();
+
+          // Detect new appointments during polling
+          if (!isInitialLoadRef.current && isPolling) {
+            const newAppointments = aList.filter(
+              (a) => !knownAppointmentIdsRef.current.has(a.id) && a.status === "confirmed"
+            );
+            if (newAppointments.length > 0) {
+              const latest = newAppointments[newAppointments.length - 1];
+              if (soundEnabled) {
+                playNotificationChime();
+              }
+              triggerHaptic(50);
+              const clientName =
+                `${latest.client?.first_name || ""} ${latest.client?.last_name || ""}`.trim() ||
+                "לקוח חדש";
+              const serviceName = latest.service?.name || "טיפול";
+              setNewBookingBanner({
+                id: latest.id,
+                clientName,
+                serviceName,
+                time: formatTime(latest.start_time),
+              });
+              confetti({ particleCount: 50, spread: 60, origin: { y: 0.2 } });
+            }
+          }
+
+          // Update known IDs Set
+          aList.forEach((a) => knownAppointmentIdsRef.current.add(a.id));
+          isInitialLoadRef.current = false;
+          setAppointments(aList);
         }
+
+        const sRes = await fetch(`/api/services?business_id=${selectedBusiness.id}`);
+        if (sRes.ok) {
+          const sList = await sRes.json();
+          setServices(sList);
+          if (sList.length > 0) {
+            setWalkinServiceId((prev) => prev || sList[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading appointments:", err);
       }
-    } catch (err) {
-      console.error("Error loading appointments:", err);
-    }
-  }, [selectedBusiness]);
+    },
+    [selectedBusiness, soundEnabled]
+  );
 
   useEffect(() => {
     if (selectedBusiness) {
-      fetchAppointments();
+      fetchAppointments(false);
     }
+  }, [selectedBusiness, fetchAppointments]);
+
+  // Background auto-polling every 15 seconds to catch new client bookings
+  useEffect(() => {
+    if (!selectedBusiness) return;
+    const intervalId = setInterval(() => {
+      fetchAppointments(true);
+    }, 15000);
+    return () => clearInterval(intervalId);
   }, [selectedBusiness, fetchAppointments]);
 
   // Load employees specific to this business (never mock staff for real new businesses!)
@@ -1564,6 +1666,30 @@ export default function AdminDashboardPage() {
         onLogout={handleLogout}
       />
 
+      {/* Real-time New Booking Toast Banner */}
+      {newBookingBanner && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white px-4 py-2.5 shadow-md flex items-center justify-between animate-in slide-in-from-top duration-300 z-50 sticky top-16">
+          <div className="flex items-center gap-3 max-w-7xl mx-auto w-full">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+            </div>
+            <div className="flex-1 text-right">
+              <span className="font-extrabold text-xs sm:text-sm block">תור חדש נקבע כעת במערכת! 🚀</span>
+              <span className="text-[11px] sm:text-xs text-emerald-100">
+                {newBookingBanner.clientName} הזמין/ה תור ל-{newBookingBanner.serviceName} בשעה {newBookingBanner.time}
+              </span>
+            </div>
+            <button
+              onClick={() => setNewBookingBanner(null)}
+              className="p-1.5 rounded-xl hover:bg-white/20 transition-colors text-white/80 hover:text-white flex-shrink-0"
+              title="סגור התראה"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">
         {/* ========================================================================= */}
@@ -1752,13 +1878,40 @@ export default function AdminDashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-slate-500 px-1">
                 <span>לוח זמנים ({dailyAppointments.length} תורים)</span>
-                <button
-                  onClick={fetchAppointments}
-                  className="flex items-center gap-1 hover:text-indigo-600 transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>רענן</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(15);
+                      const next = !soundEnabled;
+                      setSoundEnabled(next);
+                      localStorage.setItem("torli_admin_sound", String(next));
+                      if (next) playNotificationChime();
+                    }}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all border shadow-2xs",
+                      soundEnabled
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+                    )}
+                    title={soundEnabled ? "התראות קוליות מופעלות - לחץ להשתקה" : "התראות קוליות מושתקות - לחץ להפעלה"}
+                  >
+                    {soundEnabled ? (
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                    <span>{soundEnabled ? "צליל פעיל" : "מושתק"}</span>
+                  </button>
+
+                  <button
+                    onClick={() => fetchAppointments(false)}
+                    className="flex items-center gap-1 hover:text-indigo-600 transition-colors px-2.5 py-1 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold shadow-2xs"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                    <span>רענן</span>
+                  </button>
+                </div>
               </div>
 
               {dailyAppointments.length === 0 ? (
@@ -1778,10 +1931,18 @@ export default function AdminDashboardPage() {
                     app.client?.last_name || ""
                   }`.trim();
 
+                  const appDate = parseISO(app.start_time);
+                  let dateDesc = `ביום ${formatHebrewDate(appDate)}`;
+                  if (isSameDay(appDate, new Date())) {
+                    dateDesc = "היום";
+                  } else if (isSameDay(appDate, addDays(new Date(), 1))) {
+                    dateDesc = "מחר";
+                  }
+
                   const waGreeting = encodeURIComponent(
                     `היי ${app.client?.first_name || "חבר"}, תזכורת לתור שלך ל${
                       app.service?.name || "טיפול"
-                    } היום בשעה ${formatTime(app.start_time)} ב${
+                    } ${dateDesc} בשעה ${formatTime(app.start_time)} ב${
                       selectedBusiness.name
                     }! נשמח לראותך 🙂`
                   );

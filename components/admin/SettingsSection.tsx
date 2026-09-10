@@ -487,6 +487,21 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Custom Post-Booking Instructions / Notes for Clients */}
+              <div className="sm:col-span-2 pt-4 border-t border-slate-100 space-y-2">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block">הנחיות, דרכי הגעה ודגשים ללקוח לאחר קביעת תור</span>
+                  <span className="text-[11px] text-slate-400">טקסט זה יוצג בהבלטה ללקוח במסך אישור התור הסופי</span>
+                </div>
+                <textarea
+                  rows={3}
+                  value={postBookingMsg}
+                  onChange={(e) => setPostBookingMsg(e.target.value)}
+                  placeholder="לדוגמה: נא להגיע 5 דקות לפני המועד שנקבע. חניה נוחה בכחול לבן ברחוב. שימו לב שיש לעלות לקומה 2 (יש מעלית)."
+                  className="w-full p-3 rounded-2xl border border-slate-200 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium leading-relaxed"
+                />
+              </div>
             </div>
           </Card>
         )}

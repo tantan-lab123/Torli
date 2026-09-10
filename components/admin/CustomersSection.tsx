@@ -12,6 +12,7 @@ import {
   X,
   Check,
   FileText,
+  Download,
 } from "lucide-react";
 import { Client, Appointment, Service } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { formatPhone, toInternationalPhone, formatTime, formatHebrewDate, triggerHaptic, validatePhoneNumber } from "@/lib/utils";
+import { formatPhone, toInternationalPhone, formatTime, formatHebrewDate, formatShortDate, triggerHaptic, validatePhoneNumber } from "@/lib/utils";
 
 interface CustomersSectionProps {
   clients: Client[];
@@ -143,9 +144,63 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
     setNewNotes("");
   };
 
+  // Export clients list to Excel/CSV with UTF-8 BOM
+  const handleExportCSV = () => {
+    triggerHaptic(20);
+    const headers = [
+      "שם פרטי",
+      "שם משפחה",
+      "טלפון",
+      "אימייל",
+      "תאריך לידה",
+      "סה\"כ תורים",
+      "תורים מאושרים",
+      "ביטולים",
+      "סך הכנסות (₪)",
+      "תאריך תור אחרון",
+      "הערות פנימיות",
+    ];
+
+    const rows = clients.map((c) => {
+      const stats = clientStats[c.id] || {
+        totalBookings: 0,
+        confirmedBookings: 0,
+        cancellations: 0,
+        totalRevenue: 0,
+        lastAppointmentDate: null,
+      };
+
+      return [
+        `"${(c.first_name || "").replace(/"/g, '""')}"`,
+        `"${(c.last_name || "").replace(/"/g, '""')}"`,
+        `"${formatPhone(c.phone)}"`,
+        `"${(c.email || "").replace(/"/g, '""')}"`,
+        `"${(c.birthday || "").replace(/"/g, '""')}"`,
+        stats.totalBookings,
+        stats.confirmedBookings,
+        stats.cancellations,
+        stats.totalRevenue,
+        stats.lastAppointmentDate ? `"${formatShortDate(stats.lastAppointmentDate)}"` : '""',
+        `"${(c.notes || "").replace(/"/g, '""')}"`,
+      ].join(",");
+    });
+
+    // UTF-8 BOM for full Microsoft Excel Hebrew compatibility
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `לקוחות_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Top Controls: Search & Add Button */}
+      {/* Top Controls: Search, Export & Add Button */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -166,10 +221,20 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl whitespace-nowrap">
             סה&quot;כ {clients.length} לקוחות
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportCSV}
+            className="shadow-2xs whitespace-nowrap border-slate-200 hover:bg-slate-50 text-slate-700"
+            title="ייצא את כל רשימת הלקוחות לקובץ Excel / CSV"
+          >
+            <Download className="w-4 h-4 ml-1 text-indigo-600" />
+            <span>ייצוא לאקסל (CSV)</span>
+          </Button>
           <Button
             size="sm"
             onClick={() => {
@@ -286,13 +351,16 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
                   <Phone className="w-4 h-4" />
                 </a>
                 <a
-                  href={`https://wa.me/${toInternationalPhone(selectedClient.phone)}`}
+                  href={`https://wa.me/${toInternationalPhone(selectedClient.phone)}?text=${encodeURIComponent(
+                    `היי ${selectedClient.first_name}, מה שלומך? פונה אליך מבית העסק.`
+                  )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-2xs"
-                  title="שלח וואטסאפ"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 transition-colors shadow-2xs text-xs font-bold"
+                  title="שלח הודעת וואטסאפ ללקוח"
                 >
                   <MessageCircle className="w-4 h-4" />
+                  <span>וואטסאפ</span>
                 </a>
               </div>
 
@@ -348,6 +416,19 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
                           {isCancelled ? "בוטל" : "התקיים"}
                         </Badge>
                         <span className="font-bold text-slate-700">₪{s?.price || 0}</span>
+                        {!isCancelled && selectedClient.phone && (
+                          <a
+                            href={`https://wa.me/${toInternationalPhone(selectedClient.phone)}?text=${encodeURIComponent(
+                              `היי ${selectedClient.first_name}, תזכורת לתור שלך ל${s?.name || "טיפול"} ב-${formatHebrewDate(date)} בשעה ${formatTime(date)}.`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                            title="שלח תזכורת בוואטסאפ לתור זה"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </a>
+                        )}
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-slate-800">{s?.name || "טיפול"}</div>
