@@ -7,8 +7,6 @@ import {
   MessageCircle,
   Plus,
   Ban,
-  Settings,
-  Scissors,
   XCircle,
   ChevronRight,
   ChevronLeft,
@@ -16,11 +14,7 @@ import {
   Trash2,
   Send,
   RefreshCw,
-  ExternalLink,
-  LogOut,
-  Coffee,
   Sparkles,
-  Sliders,
   AlertCircle,
   Lock,
   CalendarX,
@@ -28,13 +22,13 @@ import {
   KeyRound,
   Check,
   History,
+  Dices,
 } from "lucide-react";
 import {
   Business,
   Service,
   Appointment,
   DayOfWeek,
-  DayBreak,
   DateOverride,
 } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -50,6 +44,10 @@ import {
   triggerHaptic,
   cn,
   validatePassword,
+  formatJewishDate,
+  getJewishHolidayOrShabbat,
+  getHebrewDayLetter,
+  generateRandomSlug,
 } from "@/lib/utils";
 import { supabase } from "@/lib/db/supabase";
 import {
@@ -69,6 +67,23 @@ import {
   parseISO,
 } from "date-fns";
 import { he } from "date-fns/locale";
+import { AdminTopBar, AdminTab } from "@/components/admin/AdminTopBar";
+import { AdminFAB } from "@/components/admin/AdminFAB";
+import { CustomersSection } from "@/components/admin/CustomersSection";
+import { StatsSection } from "@/components/admin/StatsSection";
+import { EmployeesSection } from "@/components/admin/EmployeesSection";
+import { ProductsSection } from "@/components/admin/ProductsSection";
+import { MarketingSection } from "@/components/admin/MarketingSection";
+import { CashRegisterSection } from "@/components/admin/CashRegisterSection";
+import { WorkScheduleSection } from "@/components/admin/WorkScheduleSection";
+import { ServicesSection } from "@/components/admin/ServicesSection";
+import { SettingsSection } from "@/components/admin/SettingsSection";
+import {
+  DEFAULT_EMPLOYEES,
+  DEFAULT_PRODUCTS,
+  DEFAULT_MARKETING_MESSAGES,
+} from "@/lib/mock-saas";
+import { Employee, Product, MarketingMessage, Client } from "@/lib/types";
 
 const ADMIN_SESSION_KEY = "schedule_active_business_slug_v2";
 
@@ -79,8 +94,38 @@ export default function AdminDashboardPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // View state: 'schedule' | 'settings'
-  const [activeTab, setActiveTab] = useState<"schedule" | "settings">("schedule");
+  // Active TopBar Tab (11 core areas)
+  const [activeTab, setActiveTab] = useState<AdminTab>("calendar");
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
+
+  // SaaS domain collections
+  const [employees, setEmployees] = useState<Employee[]>(DEFAULT_EMPLOYEES.default);
+  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS.default);
+  const [marketingMessages, setMarketingMessages] = useState<MarketingMessage[]>(DEFAULT_MARKETING_MESSAGES);
+  const [customClients, setCustomClients] = useState<Client[]>([]);
+
+  // Unique CRM Clients computed from appointments + custom created clients
+  const clients = useMemo(() => {
+    const map = new Map<string, Client>();
+    appointments.forEach((app) => {
+      if (app.client) {
+        map.set(app.client.id, app.client);
+      } else if (app.client_id) {
+        if (!map.has(app.client_id)) {
+          map.set(app.client_id, {
+            id: app.client_id,
+            business_id: selectedBusiness?.id || "",
+            first_name: "לקוח",
+            last_name: `#${app.client_id.slice(-4)}`,
+            phone: "050-0000000",
+          });
+        }
+      }
+    });
+    customClients.forEach((c) => map.set(c.id, c));
+    return Array.from(map.values());
+  }, [appointments, customClients, selectedBusiness]);
+
   const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
 
   // Schedule sub-mode: 'day' = detailed day timeline, 'month' = full month calendar & batch closure
@@ -106,7 +151,7 @@ export default function AdminDashboardPage() {
 
   // New Business Registration Form
   const [regName, setRegName] = useState("");
-  const [regSlug, setRegSlug] = useState("");
+  const [regSlug, setRegSlug] = useState(() => generateRandomSlug(6));
   const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("");
@@ -123,9 +168,6 @@ export default function AdminDashboardPage() {
   // Modals state
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isBlockTimeOpen, setIsBlockTimeOpen] = useState(false);
-  const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
-  const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
   const [isReminderRunning, setIsReminderRunning] = useState(false);
   const [reminderResult, setReminderResult] = useState<Record<string, unknown> | null>(null);
 
@@ -143,22 +185,10 @@ export default function AdminDashboardPage() {
   const [blockEndTime, setBlockEndTime] = useState("14:00");
   const [isSubmittingBlock, setIsSubmittingBlock] = useState(false);
 
-  // Service form (for both Add and Edit)
-  const [serviceFormName, setServiceFormName] = useState("");
-  const [serviceFormDuration, setServiceFormDuration] = useState("30");
-  const [serviceFormBuffer, setServiceFormBuffer] = useState("10");
-  const [serviceFormPrice, setServiceFormPrice] = useState("80");
-  const [isSubmittingService, setIsSubmittingService] = useState(false);
-
   // Working hours, Interval, and Overrides editing state
   const [editingWorkingHours, setEditingWorkingHours] = useState<Business["working_hours"] | null>(null);
   const [editingInterval, setEditingInterval] = useState<number>(15);
   const [editingOverrides, setEditingOverrides] = useState<DateOverride[]>([]);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-
-  // Holiday override form
-  const [holidayDate, setHolidayDate] = useState("");
-  const [holidayReason, setHolidayReason] = useState("חג / יום שבתון");
 
   // Restore authenticated session from localStorage
   useEffect(() => {
@@ -337,16 +367,11 @@ export default function AdminDashboardPage() {
     triggerHaptic(25);
   };
 
-  // Auto-generate slug from name in registration form
+  // Business name change in registration form
   const handleRegNameChange = (name: string) => {
     setRegName(name);
-    const generated = name
-      .toLowerCase()
-      .trim()
-      .replace(/[\s_]+/g, "-")
-      .replace(/[^a-z0-9-]/g, "");
-    if (!regSlug || regSlug.startsWith(generated.slice(0, 3))) {
-      setRegSlug(generated || "salon-" + Math.floor(Math.random() * 1000));
+    if (!regSlug) {
+      setRegSlug(generateRandomSlug(6));
     }
   };
 
@@ -753,155 +778,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Open Service Modal for Add
-  const openAddServiceModal = () => {
-    setEditingService(null);
-    setServiceFormName("");
-    setServiceFormDuration("30");
-    setServiceFormBuffer("10");
-    setServiceFormPrice("80");
-    setIsAddServiceOpen(true);
-  };
-
-  // Open Service Modal for Edit
-  const openEditServiceModal = (service: Service) => {
-    setEditingService(service);
-    setServiceFormName(service.name);
-    setServiceFormDuration(service.duration_minutes.toString());
-    setServiceFormBuffer(service.buffer_minutes.toString());
-    setServiceFormPrice(service.price.toString());
-    setIsAddServiceOpen(true);
-  };
-
-  // Create or Update Service submit
-  const handleServiceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBusiness || !serviceFormName) return;
-
-    setIsSubmittingService(true);
-    triggerHaptic(20);
-
-    try {
-      if (editingService) {
-        const res = await fetch("/api/services", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: editingService.id,
-            name: serviceFormName,
-            duration_minutes: Number(serviceFormDuration),
-            buffer_minutes: Number(serviceFormBuffer),
-            price: Number(serviceFormPrice),
-          }),
-        });
-        if (res.ok) {
-          setIsAddServiceOpen(false);
-          fetchAppointments();
-        }
-      } else {
-        const res = await fetch("/api/services", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            business_id: selectedBusiness.id,
-            name: serviceFormName,
-            duration_minutes: Number(serviceFormDuration),
-            buffer_minutes: Number(serviceFormBuffer),
-            price: Number(serviceFormPrice),
-          }),
-        });
-        if (res.ok) {
-          setIsAddServiceOpen(false);
-          fetchAppointments();
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmittingService(false);
-    }
-  };
-
-  // Delete service
-  const handleDeleteService = async (serviceId: string) => {
-    if (!confirm("האם למחוק שירות זה?")) return;
-    try {
-      await fetch(`/api/services?id=${serviceId}`, { method: "DELETE" });
-      fetchAppointments();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Save Settings (Working hours, slot interval, date overrides)
-  const handleSaveSettings = async () => {
-    if (!selectedBusiness || !editingWorkingHours) return;
-    setIsSavingSettings(true);
-    try {
-      const res = await fetch("/api/business", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: selectedBusiness.id,
-          working_hours: editingWorkingHours,
-          slot_interval_minutes: editingInterval,
-          date_overrides: editingOverrides,
-        }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setSelectedBusiness(updated);
-        alert("כל ההגדרות נשמרו בהצלחה!");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("שגיאה בשמירת ההגדרות");
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  // Add Date Override (Holiday / Closure)
-  const handleAddHolidaySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!holidayDate) return;
-
-    const newOverride: DateOverride = {
-      id: "ov-" + Math.random().toString(36).substring(2, 7),
-      date: holidayDate,
-      is_closed: true,
-      reason: holidayReason.trim() || "חג / חופשה",
-    };
-
-    setEditingOverrides((prev) => [...prev.filter((o) => o.date !== holidayDate), newOverride]);
-    setIsAddHolidayOpen(false);
-    setHolidayDate("");
-    setHolidayReason("חג / יום שבתון");
-    triggerHaptic(20);
-  };
-
-  // Remove Date Override
-  const handleRemoveOverride = (overrideId: string) => {
-    setEditingOverrides((prev) => prev.filter((o) => o.id !== overrideId));
-    triggerHaptic(15);
-  };
-
-  // Helper: Apply lunch break to all active days
-  const applyLunchToAllDays = (sampleBreak: DayBreak) => {
-    if (!editingWorkingHours) return;
-    const updated = { ...editingWorkingHours };
-    (Object.keys(updated) as DayOfWeek[]).forEach((day) => {
-      if (updated[day].active) {
-        updated[day] = {
-          ...updated[day],
-          lunch_break: { ...sampleBreak },
-        };
-      }
-    });
-    setEditingWorkingHours(updated);
-    triggerHaptic(20);
-  };
-
   // Test WhatsApp Reminder Cron Trigger
   const handleTriggerReminderCron = async () => {
     setIsReminderRunning(true);
@@ -1135,20 +1011,43 @@ export default function AdminDashboardPage() {
                 />
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">
-                    סיומת כתובת האתר (Slug באנגלית) *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      סיומת קישור אישית (6 אותיות רנדומליות) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic(15);
+                        setRegSlug(generateRandomSlug(6));
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 transition-colors"
+                    >
+                      <Dices className="w-3.5 h-3.5" />
+                      <span>הגרל סלאג חדש</span>
+                    </button>
+                  </div>
                   <div className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 h-12 ltr focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/15 transition-all">
-                    <span className="text-xs text-slate-400 font-mono">schedule.app/</span>
+                    <span className="text-xs text-slate-400 font-mono">torli.app/</span>
                     <input
                       type="text"
                       value={regSlug}
-                      onChange={(e) => setRegSlug(e.target.value)}
-                      placeholder="eliran-barber"
+                      onChange={(e) =>
+                        setRegSlug(
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]/g, "")
+                            .slice(0, 12)
+                        )
+                      }
+                      placeholder="kx9m2p"
                       className="w-full bg-transparent border-none text-sm font-bold text-indigo-600 focus:outline-none pl-1"
                       required
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-1 text-right">
+                    כתובת מקוצרת וקלה לשיתוף (למשל torli-eight.vercel.app/{regSlug || "kx9m2p"})
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1277,105 +1176,69 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const daysList: DayOfWeek[] = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-
-  const hebrewDaysMap: Record<DayOfWeek, string> = {
-    sunday: "יום ראשון",
-    monday: "יום שני",
-    tuesday: "יום שלישי",
-    wednesday: "יום רביעי",
-    thursday: "יום חמישי",
-    friday: "יום שישי",
-    saturday: "יום שבת",
-  };
-
   // =========================================================================
   // AUTHENTICATED: SCOPED PRIVATE DASHBOARD
   // =========================================================================
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-24">
-      {/* Mobile Top Sticky Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm">
-              <Scissors className="w-4 h-4" />
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-extrabold text-slate-900 leading-tight">
-                {selectedBusiness.name}
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                <span className="font-mono">/{selectedBusiness.slug}</span>
-                <a
-                  href={`/${selectedBusiness.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 font-semibold hover:underline inline-flex items-center gap-0.5"
-                >
-                  <span>עמוד ציבורי</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-xl hover:bg-rose-100 transition-colors font-medium"
-              title="התנתק מהחשבון"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>התנתק</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* SaaS 11-Destination Top Navigation Bar */}
+      <AdminTopBar
+        business={selectedBusiness}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content Area */}
-      <main className="max-w-xl mx-auto px-4 pt-4 space-y-4">
-        {/* Navigation Tabs (Schedule / Settings) */}
-        <div className="flex bg-slate-200/80 p-1 rounded-2xl">
-          <button
-            onClick={() => setActiveTab("schedule")}
-            className={cn(
-              "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5",
-              activeTab === "schedule"
-                ? "bg-white text-indigo-600 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <CalendarDays className="w-4 h-4" />
-            <span>יומן תורים יומי</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={cn(
-              "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5",
-              activeTab === "settings"
-                ? "bg-white text-indigo-600 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <Settings className="w-4 h-4" />
-            <span>הגדרות, מרווחים וחגים</span>
-          </button>
-        </div>
-
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">
         {/* ========================================================================= */}
-        {/* TAB 1: SCHEDULE VIEW */}
+        {/* TAB 1: CALENDAR VIEW */}
         {/* ========================================================================= */}
-        {activeTab === "schedule" && (
+        {activeTab === "calendar" && (
           <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Staff Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                <span className="text-xs font-bold text-slate-500 whitespace-nowrap ml-1">סינון לפי עובד:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(10);
+                    setSelectedStaffId("all");
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    selectedStaffId === "all"
+                      ? "bg-indigo-600 text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  כל הצוות ({employees.length})
+                </button>
+                {employees.map((emp) => (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(10);
+                      setSelectedStaffId(emp.id);
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap",
+                      selectedStaffId === emp.id
+                        ? "bg-indigo-600 text-white shadow-2xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    )}
+                  >
+                    <span>{emp.name.split(" ")[0]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 text-right whitespace-nowrap">
+                <span>{dailyAppointments.length} תורים נקבעו ליום זה</span>
+              </div>
+            </div>
             {/* Schedule View Segment Control */}
             <div className="flex bg-slate-200/85 p-1 rounded-2xl">
               <button
@@ -1430,6 +1293,16 @@ export default function AdminDashboardPage() {
                   <div className="text-base font-bold text-slate-900">
                     {formatHebrewDate(selectedDate)}
                   </div>
+                  {selectedBusiness?.settings?.show_hebrew_dates && (
+                    <div className="text-xs text-indigo-600 font-bold mt-0.5 flex items-center justify-center gap-1.5">
+                      <span>{formatJewishDate(selectedDate, true)}</span>
+                      {getJewishHolidayOrShabbat(selectedDate) && (
+                        <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-md border border-indigo-200/60 text-[10px]">
+                          {getJewishHolidayOrShabbat(selectedDate)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-center gap-2 text-xs text-slate-500 mt-0.5">
                     {isSameDay(selectedDate, startOfToday()) ? (
                       <span className="text-emerald-600 font-semibold">היום</span>
@@ -1761,10 +1634,23 @@ export default function AdminDashboardPage() {
                             >
                               {dayNum}
                             </span>
+                            {selectedBusiness?.settings?.show_hebrew_dates && (
+                              <span className="text-[10px] text-slate-500 font-bold truncate max-w-[44px]">
+                                {getHebrewDayLetter(day)}
+                              </span>
+                            )}
                             {isTodayDate && (
                               <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
                             )}
                           </div>
+
+                          {selectedBusiness?.settings?.show_hebrew_dates && getJewishHolidayOrShabbat(day) && (
+                            <div className="w-full text-center px-0.5 mt-0.5">
+                              <span className="text-[9px] font-semibold text-amber-800 bg-amber-50/90 border border-amber-200/70 px-1 py-0.5 rounded block truncate">
+                                {getJewishHolidayOrShabbat(day)}
+                              </span>
+                            </div>
+                          )}
 
                           <div className="w-full text-center my-auto">
                             {isPastDate ? (
@@ -1826,384 +1712,182 @@ export default function AdminDashboardPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: SETTINGS - INTERVAL RESOLUTION, HOLIDAYS & SERVICES */}
+        {/* TAB 2: STATS */}
         {/* ========================================================================= */}
-        {activeTab === "settings" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            {/* 1. SLOT INTERVAL RESOLUTION PICKER */}
-            <Card className="p-5 space-y-3">
-              <div className="text-right border-b border-slate-100 pb-2.5">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2 justify-end">
-                  <span>רזולוציית זימון תורים (מרווח בין שעות)</span>
-                  <Clock className="w-5 h-5 text-indigo-600" />
-                </h3>
-                <p className="text-xs text-slate-500">
-                  קבע באיזה מרווחי זמן תרצה שיוצעו תורים ללקוחות בעמוד ההזמנות
-                </p>
-              </div>
+        {activeTab === "stats" && (
+          <div className="animate-in fade-in duration-200">
+            <StatsSection
+              appointments={appointments}
+              services={services}
+              clients={clients}
+            />
+          </div>
+        )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-                {[
-                  { mins: 15, label: "כל 15 דק'", desc: "09:00, 09:15, 09:30" },
-                  { mins: 20, label: "כל 20 דק'", desc: "09:00, 09:20, 09:40" },
-                  { mins: 30, label: "כל 30 דק'", desc: "09:00, 09:30, 10:00" },
-                  { mins: 45, label: "כל 45 דק'", desc: "09:00, 09:45, 10:30" },
-                  { mins: 60, label: "כל שעה עגולה", desc: "09:00, 10:00, 11:00" },
-                ].map((item) => (
-                  <button
-                    key={item.mins}
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic(20);
-                      setEditingInterval(item.mins);
-                    }}
-                    className={cn(
-                      "p-3 rounded-2xl border-2 text-right transition-all flex flex-col justify-between",
-                      editingInterval === item.mins
-                        ? "border-indigo-600 bg-indigo-50/50 shadow-sm"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-xs text-slate-900">
-                        {item.label}
-                      </span>
-                      {editingInterval === item.mins && (
-                        <div className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {item.desc}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </Card>
+        {/* ========================================================================= */}
+        {/* TAB 3: CUSTOMERS & CRM */}
+        {/* ========================================================================= */}
+        {activeTab === "customers" && (
+          <div className="animate-in fade-in duration-200">
+            <CustomersSection
+              clients={clients}
+              appointments={appointments}
+              services={services}
+              businessId={selectedBusiness.id}
+              onAddClient={(newClient) => {
+                setCustomClients((prev) => [newClient as Client, ...prev]);
+              }}
+              onUpdateClientNotes={(clientId, notes) => {
+                setCustomClients((prev) => {
+                  const exists = prev.find((c) => c.id === clientId);
+                  if (exists) {
+                    return prev.map((c) => (c.id === clientId ? { ...c, notes } : c));
+                  }
+                  const clientObj = clients.find((c) => c.id === clientId);
+                  if (clientObj) {
+                    return [...prev, { ...clientObj, notes }];
+                  }
+                  return prev;
+                });
+                setAppointments((prev) =>
+                  prev.map((a) =>
+                    a.client_id === clientId && a.client
+                      ? { ...a, client: { ...a.client, notes } }
+                      : a
+                  )
+                );
+              }}
+            />
+          </div>
+        )}
 
-            {/* 2. HOLIDAYS & VACATIONS OVERRIDES */}
-            <Card className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                <div className="text-right">
-                  <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2 justify-end">
-                    <span>חופשות, חגים וסגירות מיוחדות</span>
-                    <Palmtree className="w-5 h-5 text-emerald-600" />
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    סגירת תאריכים נקודתיים (למשל: סגור ביום שני הקרוב, או חופשת חול המועד)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => {
-                      applyPresetNextWeek();
-                      setIsRangeModalOpen(true);
-                    }}
-                    className="rounded-xl text-xs gap-1 shadow-xs"
-                  >
-                    <CalendarX className="w-3.5 h-3.5 ml-1" />
-                    <span>סגור שבוע / חופשה</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsAddHolidayOpen(true)}
-                    className="rounded-xl text-xs gap-1 border-emerald-300 text-emerald-800 bg-emerald-50/50"
-                  >
-                    <Plus className="w-3.5 h-3.5 ml-1" />
-                    <span>הוסף יום בודד</span>
-                  </Button>
-                </div>
-              </div>
+        {/* ========================================================================= */}
+        {/* TAB 4: SERVICES & PRICING */}
+        {/* ========================================================================= */}
+        {activeTab === "services" && (
+          <div className="animate-in fade-in duration-200">
+            <ServicesSection
+              services={services}
+              businessId={selectedBusiness.id}
+              onAddService={async (service) => {
+                await fetch("/api/services", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(service),
+                });
+                fetchAppointments();
+              }}
+              onEditService={async (service) => {
+                await fetch("/api/services", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(service),
+                });
+                fetchAppointments();
+              }}
+              onDeleteService={async (serviceId) => {
+                try {
+                  await fetch(`/api/services?id=${serviceId}`, { method: "DELETE" });
+                  fetchAppointments();
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+            />
+          </div>
+        )}
 
-              {editingOverrides.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                  לא הוגדרו חופשות או חגים קרובים. לוח הפעילות הרגיל פעיל כרגיל.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {editingOverrides.map((ov) => (
-                    <div
-                      key={ov.id}
-                      className="p-3 rounded-2xl border border-rose-200 bg-rose-50/40 flex items-center justify-between text-right"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-rose-950">
-                            {formatHebrewDate(ov.date)}
-                          </span>
-                          <Badge variant="destructive">סגור לקבלת קהל</Badge>
-                        </div>
-                        <p className="text-xs text-rose-700 mt-0.5">
-                          סיבה: {ov.reason}
-                        </p>
-                      </div>
+        {/* ========================================================================= */}
+        {/* TAB 5: WORK SCHEDULE & ATTENDANCE */}
+        {/* ========================================================================= */}
+        {activeTab === "workschedule" && (
+          <div className="animate-in fade-in duration-200">
+            <WorkScheduleSection
+              business={selectedBusiness}
+              workingHours={editingWorkingHours || selectedBusiness.working_hours}
+              onUpdateWorkingHours={async (hours) => {
+                setEditingWorkingHours(hours);
+                await fetch("/api/business", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: selectedBusiness.id,
+                    working_hours: hours,
+                  }),
+                });
+              }}
+              dateOverrides={editingOverrides}
+              onAddOverride={async (ovr) => {
+                const updated = [...editingOverrides, ovr];
+                setEditingOverrides(updated);
+                await fetch("/api/business", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: selectedBusiness.id,
+                    date_overrides: updated,
+                  }),
+                });
+              }}
+              onDeleteOverride={async (ovrId) => {
+                const updated = editingOverrides.filter((o) => o.id !== ovrId);
+                setEditingOverrides(updated);
+                await fetch("/api/business", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: selectedBusiness.id,
+                    date_overrides: updated,
+                  }),
+                });
+              }}
+            />
+          </div>
+        )}
 
-                      <button
-                        onClick={() => handleRemoveOverride(ov.id)}
-                        className="p-2 text-rose-400 hover:text-rose-600 rounded-lg"
-                        title="בטל סגירה זו"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
+        {/* ========================================================================= */}
+        {/* TAB 6: EMPLOYEES */}
+        {/* ========================================================================= */}
+        {activeTab === "employees" && (
+          <div className="animate-in fade-in duration-200">
+            <EmployeesSection
+              employees={employees}
+              services={services}
+              businessId={selectedBusiness.id}
+              onAddEmployee={(newEmp) => {
+                setEmployees((prev) => [newEmp as Employee, ...prev]);
+              }}
+              onToggleVisibility={(empId) => {
+                setEmployees((prev) =>
+                  prev.map((e) =>
+                    e.id === empId ? { ...e, is_visible_online: !e.is_visible_online } : e
+                  )
+                );
+              }}
+              onDeleteEmployee={(empId) => {
+                setEmployees((prev) => prev.filter((e) => e.id !== empId));
+              }}
+            />
+          </div>
+        )}
 
-            {/* 3. SERVICES MANAGEMENT WITH CUSTOM BUFFER/RECOVERY */}
-            <Card className="p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="text-right">
-                  <h3 className="font-extrabold text-base text-slate-900">
-                    ניהול שירותים, מחירים וזמני מנוחה
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    הגדר לכל שירות את משך הטיפול וזמן ההתאוששות/הכנת העמדה (Buffer)
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={openAddServiceModal}
-                  className="rounded-xl text-xs gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>שירות חדש</span>
-                </Button>
-              </div>
+        {/* ========================================================================= */}
+        {/* TAB 7: MARKETING & MESSAGES */}
+        {/* ========================================================================= */}
+        {activeTab === "marketing" && (
+          <div className="animate-in fade-in duration-200 space-y-4">
+            <MarketingSection
+              messages={marketingMessages}
+              clients={clients}
+              businessName={selectedBusiness.name}
+              businessSlug={selectedBusiness.slug}
+              onSendMessage={(newMsg) => {
+                setMarketingMessages((prev) => [newMsg, ...prev]);
+              }}
+            />
 
-              <div className="space-y-2.5">
-                {services.map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between bg-white hover:border-slate-300 transition-all"
-                  >
-                    <div className="text-right">
-                      <div className="font-bold text-sm text-slate-900">{s.name}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
-                        <span className="bg-slate-100 px-2 py-0.5 rounded-md text-slate-700">
-                          {s.duration_minutes} דק׳ טיפול
-                        </span>
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 rounded-md font-semibold",
-                            s.buffer_minutes >= 15
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-indigo-50 text-indigo-700"
-                          )}
-                        >
-                          +{s.buffer_minutes} דק׳ מנוחה/התארגנות
-                        </span>
-                        <span className="font-bold text-slate-900">₪{s.price}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEditServiceModal(s)}
-                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors"
-                        title="ערוך שירות ומנוחה"
-                      >
-                        <Sliders className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteService(s.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                        title="מחק שירות"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* 4. OPERATING HOURS & RECURRING LUNCH BREAKS */}
-            <Card className="p-5 space-y-4">
-              <div className="text-right border-b border-slate-100 pb-3">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2 justify-end">
-                  <span>שעות פעילות והפסקות צהריים קבועות</span>
-                  <Coffee className="w-5 h-5 text-amber-600" />
-                </h3>
-                <p className="text-xs text-slate-500">
-                  קבע שעות פעילות שבועיות והפסקות צהריים החוסמות תורים באופן אוטומטי
-                </p>
-              </div>
-
-              {editingWorkingHours && (
-                <div className="space-y-3">
-                  {daysList.map((day) => {
-                    const config = editingWorkingHours[day];
-                    const lunch = config.lunch_break || {
-                      active: false,
-                      start: "13:00",
-                      end: "14:00",
-                    };
-
-                    return (
-                      <div
-                        key={day}
-                        className={cn(
-                          "p-3.5 rounded-2xl border transition-all space-y-3",
-                          config.active
-                            ? "bg-white border-slate-200 shadow-sm"
-                            : "bg-slate-50 border-slate-200 opacity-60"
-                        )}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={config.active}
-                              onChange={(e) => {
-                                setEditingWorkingHours({
-                                  ...editingWorkingHours,
-                                  [day]: { ...config, active: e.target.checked },
-                                });
-                              }}
-                              className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span className="font-bold text-sm text-slate-900 min-w-20 text-right">
-                              {hebrewDaysMap[day]}
-                            </span>
-                          </div>
-
-                          {config.active ? (
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-slate-500">שעות פתיחה:</span>
-                              <input
-                                type="time"
-                                value={config.open}
-                                onChange={(e) => {
-                                  setEditingWorkingHours({
-                                    ...editingWorkingHours,
-                                    [day]: { ...config, open: e.target.value },
-                                  });
-                                }}
-                                className="h-8 px-2 border rounded-lg bg-slate-50 font-bold"
-                              />
-                              <span>עד</span>
-                              <input
-                                type="time"
-                                value={config.close}
-                                onChange={(e) => {
-                                  setEditingWorkingHours({
-                                    ...editingWorkingHours,
-                                    [day]: { ...config, close: e.target.value },
-                                  });
-                                }}
-                                className="h-8 px-2 border rounded-lg bg-slate-50 font-bold"
-                              />
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400 font-semibold">
-                              סגור
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Configurable Lunch Break */}
-                        {config.active && (
-                          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs bg-amber-50/50 p-2 rounded-xl border border-amber-100">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={lunch.active}
-                                onChange={(e) => {
-                                  setEditingWorkingHours({
-                                    ...editingWorkingHours,
-                                    [day]: {
-                                      ...config,
-                                      lunch_break: {
-                                        ...lunch,
-                                        active: e.target.checked,
-                                      },
-                                    },
-                                  });
-                                }}
-                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
-                              />
-                              <span className="font-bold text-amber-900 flex items-center gap-1">
-                                <Coffee className="w-3.5 h-3.5 text-amber-600" />
-                                <span>הפסקת צהריים / מנוחה:</span>
-                              </span>
-                            </div>
-
-                            {lunch.active ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="time"
-                                  value={lunch.start}
-                                  onChange={(e) => {
-                                    setEditingWorkingHours({
-                                      ...editingWorkingHours,
-                                      [day]: {
-                                        ...config,
-                                        lunch_break: {
-                                          ...lunch,
-                                          start: e.target.value,
-                                        },
-                                      },
-                                    });
-                                  }}
-                                  className="h-7 px-2 border rounded-lg bg-white font-bold text-amber-900"
-                                />
-                                <span>עד</span>
-                                <input
-                                  type="time"
-                                  value={lunch.end}
-                                  onChange={(e) => {
-                                    setEditingWorkingHours({
-                                      ...editingWorkingHours,
-                                      [day]: {
-                                        ...config,
-                                        lunch_break: {
-                                          ...lunch,
-                                          end: e.target.value,
-                                        },
-                                      },
-                                    });
-                                  }}
-                                  className="h-7 px-2 border rounded-lg bg-white font-bold text-amber-900"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => applyLunchToAllDays(lunch)}
-                                  className="text-[11px] text-indigo-600 font-semibold hover:underline mr-1"
-                                  title="החל שעות אלו על כל ימי השבוע הפעילים"
-                                >
-                                  החל על כולם
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400">ללא הפסקת צהריים</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-
-            {/* SAVE ALL SETTINGS BUTTON */}
-            <Button
-              onClick={handleSaveSettings}
-              isLoading={isSavingSettings}
-              size="lg"
-              className="w-full shadow-lg shadow-indigo-600/25 h-13 text-base font-bold"
-            >
-              <span>שמור את כל ההגדרות (מרווחי תורים, שעות, וחגים)</span>
-            </Button>
-
-            {/* WhatsApp Reminder Cron Worker Tester */}
-            <Card className="p-5 space-y-3 bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100">
+            {/* Cron Reminders Tester Card */}
+            <Card className="p-5 space-y-3 bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100 text-right">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
                   <Send className="w-5 h-5" />
@@ -2213,8 +1897,7 @@ export default function AdminDashboardPage() {
                     בדיקת מנגנון תזכורות אוטומטיות (Cron Worker)
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    מדמה הרצת ה-Worker של ה-Cron (סורק תורים בטווח 24-25 שעות, שולח
-                    הודעות וואטסאפ מדומות ומעדכן reminder_sent = true).
+                    מדמה הרצת ה-Worker של ה-Cron (סורק תורים בטווח 24-25 שעות, שולח הודעות ומעדכן reminder_sent).
                   </p>
                 </div>
               </div>
@@ -2237,7 +1920,51 @@ export default function AdminDashboardPage() {
             </Card>
           </div>
         )}
+
+        {/* ========================================================================= */}
+        {/* TAB 9: CASH REGISTER (COMING SOON) */}
+        {/* ========================================================================= */}
+        {activeTab === "cashregister" && (
+          <div className="animate-in fade-in duration-200">
+            <CashRegisterSection
+              todayRevenue={dailyStats.revenue}
+              confirmedAppointmentsCount={dailyStats.confirmed}
+            />
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 10: SETTINGS */}
+        {/* ========================================================================= */}
+        {activeTab === "settings" && (
+          <div className="animate-in fade-in duration-200">
+            <SettingsSection
+              business={selectedBusiness}
+              slotInterval={editingInterval}
+              onUpdateSettings={async (updates) => {
+                if (!selectedBusiness) return;
+                if (updates.slot_interval_minutes) {
+                  setEditingInterval(updates.slot_interval_minutes);
+                }
+                const res = await fetch("/api/business", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: selectedBusiness.id,
+                    ...updates,
+                  }),
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setSelectedBusiness(updated);
+                }
+              }}
+            />
+          </div>
+        )}
       </main>
+
+
 
       {/* ========================================================================= */}
       {/* MODAL 1: QUICK ADD / WALKIN */}
@@ -2367,148 +2094,6 @@ export default function AdminDashboardPage() {
             className="w-full mt-2"
           >
             <span>חסום זמן זה כעת</span>
-          </Button>
-        </form>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* MODAL 3: ADD OR EDIT SERVICE WITH CUSTOM RECOVERY/BUFFER TIME */}
-      {/* ========================================================================= */}
-      <Modal
-        isOpen={isAddServiceOpen}
-        onClose={() => setIsAddServiceOpen(false)}
-        title={editingService ? "עריכת שירות וזמני מנוחה" : "הוספת שירות חדש"}
-        description="קבע את משך הטיפול, זמן ההתאוששות/הכנת העמדה, והמחיר"
-      >
-        <form onSubmit={handleServiceSubmit} className="space-y-4 text-right">
-          <Input
-            label="שם השירות *"
-            placeholder="לדוגמה: צביעת שיער + פן, החלקה אורגנית"
-            value={serviceFormName}
-            onChange={(e) => setServiceFormName(e.target.value)}
-            required
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="משך הטיפול בפועל (בדקות) *"
-              type="number"
-              value={serviceFormDuration}
-              onChange={(e) => setServiceFormDuration(e.target.value)}
-              helperText="כמה זמן נמשך הטיפול על הלקוח"
-              required
-            />
-            <Input
-              label="מחיר השירות (₪) *"
-              type="number"
-              value={serviceFormPrice}
-              onChange={(e) => setServiceFormPrice(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                <Coffee className="w-4 h-4 text-indigo-600" />
-                <span>זמן התאוששות, מנוחה והכנת עמדה (Buffer)</span>
-              </span>
-              <span className="text-sm font-extrabold text-indigo-700">
-                {serviceFormBuffer} דקות
-              </span>
-            </div>
-            <p className="text-[11px] text-indigo-800 leading-snug">
-              טיפולים מעייפים או מורכבים (החלקה, צבע, עיסוי עמוק) לוקחים יותר כוח ודורשים
-              זמן מנוחה ארוך יותר לפני הלקוח הבא.
-            </p>
-
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {[0, 5, 10, 15, 20, 30, 45].map((mins) => (
-                <button
-                  key={mins}
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic(15);
-                    setServiceFormBuffer(mins.toString());
-                  }}
-                  className={cn(
-                    "px-2.5 py-1 rounded-xl text-xs font-bold border transition-all",
-                    serviceFormBuffer === mins.toString()
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                      : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
-                  )}
-                >
-                  {mins === 0 ? "ללא מנוחה" : `${mins} דק'`}
-                </button>
-              ))}
-            </div>
-
-            <div className="text-[11px] text-slate-500 pt-1 border-t border-indigo-100 flex justify-between">
-              <span>סך הזמן שייחסם ביומן:</span>
-              <span className="font-bold text-slate-900">
-                {Number(serviceFormDuration) + Number(serviceFormBuffer)} דקות
-              </span>
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            size="lg"
-            isLoading={isSubmittingService}
-            className="w-full mt-2"
-          >
-            <span>{editingService ? "שמור שינויים" : "צור שירות"}</span>
-          </Button>
-        </form>
-      </Modal>
-
-      {/* ========================================================================= */}
-      {/* MODAL 4: ADD HOLIDAY / DATE CLOSURE OVERRIDE */}
-      {/* ========================================================================= */}
-      <Modal
-        isOpen={isAddHolidayOpen}
-        onClose={() => setIsAddHolidayOpen(false)}
-        title="הוספת חופשה / חג / סגירה נקודתית"
-        description="בחר תאריך ספציפי שבו בית העסק יהיה סגור לקבלת קהל"
-      >
-        <form onSubmit={handleAddHolidaySubmit} className="space-y-4 text-right">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
-              בחר תאריך לסגירה *
-            </label>
-            <input
-              type="date"
-              value={holidayDate}
-              onChange={(e) => setHolidayDate(e.target.value)}
-              className="w-full h-12 rounded-2xl border border-slate-200 px-4 text-base font-bold bg-white"
-              required
-            />
-          </div>
-
-          <Input
-            label="סיבת הסגירה (תוצג ללקוחות) *"
-            placeholder="לדוגמה: יום בחירות, חול המועד, אירוע משפחתי, שיפוצים"
-            value={holidayReason}
-            onChange={(e) => setHolidayReason(e.target.value)}
-            required
-          />
-
-          <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200 text-xs text-amber-800 space-y-1">
-            <p className="font-bold">לתשומת לבך:</p>
-            <p>
-              בתאריך זה, עמוד ההזמנות של הלקוחות יחסום לחלוטין את כל השעות ויציג הודעה
-              ברורה שבית העסק סגור בתאריך זה לרגל {holidayReason || "חג/חופשה"}.
-            </p>
-          </div>
-
-          <Button
-            type="submit"
-            size="lg"
-            variant="destructive"
-            className="w-full mt-2"
-          >
-            <CalendarX className="w-4 h-4 ml-2" />
-            <span>סגור תאריך זה להזמנות</span>
           </Button>
         </form>
       </Modal>
@@ -2775,6 +2360,17 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Floating Action Button (FAB) for quick operations */}
+      <AdminFAB
+        businessSlug={selectedBusiness.slug}
+        businessName={selectedBusiness.name}
+        onNewAppointment={() => {
+          setWalkinServiceId(services[0]?.id || "");
+          setIsQuickAddOpen(true);
+        }}
+        onBlockTime={() => setIsBlockTimeOpen(true)}
+      />
     </div>
   );
 }

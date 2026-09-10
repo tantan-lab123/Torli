@@ -28,6 +28,9 @@ import {
   generateIcsDataUrl,
   triggerHaptic,
   cn,
+  formatJewishDate,
+  getJewishHolidayOrShabbat,
+  getHebrewDayLetter,
 } from "@/lib/utils";
 import {
   addMonths,
@@ -376,12 +379,21 @@ export default function BookingPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 md:pb-12">
       {/* Mobile App Bar / Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5 transition-all">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5 transition-all shadow-xs">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20">
-              <Scissors className="w-5 h-5" />
-            </div>
+            {business.settings?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={business.settings.logo_url}
+                alt={business.name}
+                className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-md shadow-slate-200/50 flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20 flex-shrink-0">
+                <Scissors className="w-5 h-5" />
+              </div>
+            )}
             <div className="text-right">
               <h1 className="font-bold text-base text-slate-900 leading-tight">
                 {business.name}
@@ -427,6 +439,19 @@ export default function BookingPage() {
         {/* ========================================================================= */}
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Business Cover Photo - perfectly sized to match service card width */}
+            {business.settings?.cover_image_url && (
+              <div className="relative w-full h-44 sm:h-48 rounded-2xl overflow-hidden shadow-sm border border-slate-200/90 bg-slate-100 group mb-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={business.settings.cover_image_url}
+                  alt={business.name}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent pointer-events-none" />
+              </div>
+            )}
+
             <div className="text-right mb-2">
               <h2 className="text-xl font-extrabold text-slate-900">בחר שירות</h2>
               <p className="text-sm text-slate-500">בחר את סוג הטיפול או השירות המבוקש</p>
@@ -558,13 +583,20 @@ export default function BookingPage() {
                 </button>
 
                 {/* Current Month Title */}
-                <div className="flex items-center justify-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-indigo-600" />
-                  <span className="text-base sm:text-lg font-extrabold text-slate-900 capitalize">
-                    {format(currentMonth, "MMMM yyyy", { locale: he })}
-                  </span>
-                  {isLoadingMonth && (
-                    <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-1" />
+                <div className="flex flex-col items-center justify-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-indigo-600" />
+                    <span className="text-base sm:text-lg font-extrabold text-slate-900 capitalize">
+                      {format(currentMonth, "MMMM yyyy", { locale: he })}
+                    </span>
+                    {isLoadingMonth && (
+                      <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mr-1" />
+                    )}
+                  </div>
+                  {business?.settings?.show_hebrew_dates && (
+                    <span className="text-xs font-bold text-indigo-600/90 mt-0.5">
+                      {formatJewishDate(currentMonth, true)}
+                    </span>
                   )}
                 </div>
 
@@ -606,6 +638,7 @@ export default function BookingPage() {
                   const isSelected = isSameDay(day, selectedDate);
                   const isPastDate = isBefore(day, startOfToday());
                   const dayAvail = monthAvailability[dateStr];
+                  const holiday = business?.settings?.show_hebrew_dates ? getJewishHolidayOrShabbat(day) : null;
                   
                   // Has available slots check
                   const hasSlots = dayAvail ? dayAvail.hasSlots : false;
@@ -618,24 +651,44 @@ export default function BookingPage() {
                         type="button"
                         onClick={() => handleSelectDate(day)}
                         className={cn(
-                          "relative w-9 h-9 sm:w-10 sm:h-10 mx-auto rounded-full flex flex-col items-center justify-center transition-all duration-150 group",
+                          "relative w-9 h-11 sm:w-11 sm:h-12 mx-auto rounded-2xl flex flex-col items-center justify-center transition-all duration-150 group",
                           isSelected
                             ? "bg-indigo-600 text-white font-extrabold shadow-md shadow-indigo-600/35 ring-2 ring-indigo-200 scale-105"
                             : "bg-slate-100/90 text-slate-800 font-bold border border-slate-200/90 hover:bg-indigo-50 hover:border-indigo-400 hover:text-indigo-600 hover:scale-105 active:scale-95 shadow-2xs",
                           !isSelected && isToday(day) && "ring-2 ring-indigo-400/60 ring-offset-1"
                         )}
-                        title={`תאריך ${formatHebrewDate(day)} - לחץ לבחירת שעה`}
+                        title={`תאריך ${formatHebrewDate(day)}${business?.settings?.show_hebrew_dates ? ` (${formatJewishDate(day)}${holiday ? ` - ${holiday}` : ""})` : ""} - לחץ לבחירת שעה`}
                       >
                         <span className="text-xs sm:text-sm leading-none font-bold">
                           {dayNum}
                         </span>
-                        {/* Dot indicator */}
-                        <span
-                          className={cn(
-                            "w-1 h-1 rounded-full mt-0.5 transition-colors",
-                            isSelected ? "bg-white" : "bg-emerald-500 group-hover:bg-indigo-500"
-                          )}
-                        />
+                        {business?.settings?.show_hebrew_dates && (
+                          <span
+                            className={cn(
+                              "text-[9px] sm:text-[10px] leading-tight font-bold truncate max-w-[38px] mt-0.5",
+                              isSelected ? "text-indigo-100" : holiday ? "text-amber-700 group-hover:text-indigo-600" : "text-slate-500 group-hover:text-indigo-600"
+                            )}
+                          >
+                            {getHebrewDayLetter(day)}
+                          </span>
+                        )}
+                        {/* Indicator: holiday dot or slot dot */}
+                        {holiday ? (
+                          <span
+                            className={cn(
+                              "w-1.5 h-1.5 rounded-full mt-0.5",
+                              isSelected ? "bg-amber-300" : "bg-amber-500"
+                            )}
+                            title={holiday}
+                          />
+                        ) : (
+                          <span
+                            className={cn(
+                              "w-1 h-1 rounded-full mt-0.5 transition-colors",
+                              isSelected ? "bg-white" : "bg-emerald-500 group-hover:bg-indigo-500"
+                            )}
+                          />
+                        )}
                       </button>
                     );
                   }
@@ -647,10 +700,15 @@ export default function BookingPage() {
                       type="button"
                       disabled
                       aria-disabled="true"
-                      className="w-9 h-9 sm:w-10 sm:h-10 mx-auto rounded-full flex items-center justify-center text-xs sm:text-sm text-slate-300 bg-transparent cursor-not-allowed opacity-35 select-none pointer-events-none"
-                      title="אין תורים זמינים בתאריך זה"
+                      className="w-9 h-11 sm:w-11 sm:h-12 mx-auto rounded-2xl flex flex-col items-center justify-center text-xs sm:text-sm text-slate-300 bg-transparent cursor-not-allowed opacity-35 select-none pointer-events-none"
+                      title={holiday ? `${formatHebrewDate(day)} - ${holiday}` : "אין תורים זמינים בתאריך זה"}
                     >
-                      <span>{dayNum}</span>
+                      <span className="leading-none">{dayNum}</span>
+                      {business?.settings?.show_hebrew_dates && (
+                        <span className="text-[9px] sm:text-[10px] leading-tight text-slate-400 font-medium truncate max-w-[38px] mt-0.5">
+                          {getHebrewDayLetter(day)}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -668,19 +726,42 @@ export default function BookingPage() {
                   <span className="w-3.5 h-3.5 rounded-full bg-indigo-600" />
                   <span className="font-semibold text-slate-700">יום נבחר</span>
                 </div>
+                {business?.settings?.show_hebrew_dates && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    </span>
+                    <span className="text-amber-900 font-medium">שבת / חג</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5">
                   <span className="w-3.5 h-3.5 rounded-full text-slate-300 text-[10px] flex items-center justify-center font-bold">
                     —
                   </span>
-                  <span>סגור / אין תורים</span>
+                  <span>סגור</span>
                 </div>
               </div>
             </Card>
 
             {/* Selected Date Header */}
-            <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3.5 text-center text-sm font-semibold text-indigo-950 flex items-center justify-center gap-2 shadow-2xs">
-              <Clock className="w-4 h-4 text-indigo-600" />
-              <span>שעות פנויות ל{formatHebrewDate(selectedDate)}:</span>
+            <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 text-center text-sm font-semibold text-indigo-950 flex flex-col items-center justify-center gap-1.5 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <span>שעות פנויות ל{formatHebrewDate(selectedDate)}:</span>
+              </div>
+              {business?.settings?.show_hebrew_dates && (
+                <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold mt-0.5">
+                  <span className="text-indigo-800">
+                    תאריך עברי: {formatJewishDate(selectedDate, true)}
+                  </span>
+                  {getJewishHolidayOrShabbat(selectedDate) && (
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full text-xs font-extrabold shadow-2xs flex items-center gap-1">
+                      <span>✨</span>
+                      <span>{getJewishHolidayOrShabbat(selectedDate)}</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Slots Section */}
@@ -1012,9 +1093,17 @@ export default function BookingPage() {
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500">מועד:</span>
-                  <span className="font-bold text-slate-900">
-                    {formatHebrewDate(selectedDate)}
-                  </span>
+                  <div className="text-left">
+                    <span className="font-bold text-slate-900 block">
+                      {formatHebrewDate(selectedDate)}
+                    </span>
+                    {business?.settings?.show_hebrew_dates && (
+                      <span className="text-xs text-indigo-600 font-bold block mt-0.5">
+                        {formatJewishDate(selectedDate, true)}
+                        {getJewishHolidayOrShabbat(selectedDate) ? ` • ${getJewishHolidayOrShabbat(selectedDate)}` : ""}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500">שעה:</span>
@@ -1104,6 +1193,52 @@ export default function BookingPage() {
                 </div>
               </div>
             </Card>
+
+            {/* Instant Digital Payment Options (Bit & PayBox) */}
+            {(business?.settings?.bit_payment_url || business?.settings?.paybox_payment_url) && (
+              <Card className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/80 to-purple-50/80 border border-indigo-200/80 rounded-3xl shadow-sm text-right space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">💳</span>
+                    <span className="text-xs font-extrabold text-slate-900">
+                      תשלום מהיר בנייד (Bit / PayBox)
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-bold text-indigo-700 bg-white/90 border border-indigo-200 px-2 py-0.5 rounded-full shadow-2xs">
+                    ₪{confirmedAppointment.service?.price || selectedService?.price}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  באפשרותך להעביר תשלום ישירות לחשבון בית העסק כעת בלחיצה אחת:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {business?.settings?.bit_payment_url && (
+                    <a
+                      href={business.settings.bit_payment_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 h-11 rounded-2xl bg-[#002d72] hover:bg-[#002256] text-white font-bold text-xs shadow-sm active:scale-95 transition-all"
+                    >
+                      <span className="text-sm">🔹</span>
+                      <span>שלם עכשיו ב-Bit</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                    </a>
+                  )}
+                  {business?.settings?.paybox_payment_url && (
+                    <a
+                      href={business.settings.paybox_payment_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 h-11 rounded-2xl bg-[#008de4] hover:bg-[#0079c4] text-white font-bold text-xs shadow-sm active:scale-95 transition-all"
+                    >
+                      <span className="text-sm">📦</span>
+                      <span>שלם עכשיו ב-PayBox</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                    </a>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {/* Action Buttons: Add to Google Calendar & Apple/ICS */}
             <div className="space-y-2.5">

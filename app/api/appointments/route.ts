@@ -8,7 +8,15 @@ import {
   createAppointment,
   blockTimeSlot,
 } from "@/lib/db";
-import { addMinutes, isBefore, isAfter, parseISO } from "date-fns";
+import {
+  addMinutes,
+  isBefore,
+  isAfter,
+  parseISO,
+  isSameDay,
+  isSameWeek,
+  isSameMonth,
+} from "date-fns";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +136,60 @@ export async function POST(request: NextRequest) {
       google_id: google_id || undefined,
       auth_provider: auth_provider || 'guest',
     });
+
+    // Enforce business booking limits per client (day, week, month)
+    const clientActiveAppointments = existing.filter(
+      (app) => app.client_id === client.id && app.status !== "cancelled"
+    );
+
+    const maxDay = business.settings?.max_appointments_per_day ?? 0;
+    if (maxDay > 0) {
+      const sameDayCount = clientActiveAppointments.filter((app) =>
+        isSameDay(parseISO(app.start_time), slotStart)
+      ).length;
+      if (sameDayCount >= maxDay) {
+        return NextResponse.json(
+          {
+            error: `הגעת למגבלת התורים המותרת ליום אחד (${maxDay} ${
+              maxDay === 1 ? "תור" : "תורים"
+            } ביום).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const maxWeek = business.settings?.max_appointments_per_week ?? 0;
+    if (maxWeek > 0) {
+      const sameWeekCount = clientActiveAppointments.filter((app) =>
+        isSameWeek(parseISO(app.start_time), slotStart, { weekStartsOn: 0 })
+      ).length;
+      if (sameWeekCount >= maxWeek) {
+        return NextResponse.json(
+          {
+            error: `הגעת למגבלת התורים המותרת לשבוע אחד (${maxWeek} ${
+              maxWeek === 1 ? "תור" : "תורים"
+            } בשבוע).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const maxMonth = business.settings?.max_appointments_per_month ?? 0;
+    if (maxMonth > 0) {
+      const sameMonthCount = clientActiveAppointments.filter((app) =>
+        isSameMonth(parseISO(app.start_time), slotStart)
+      ).length;
+      if (sameMonthCount >= maxMonth) {
+        return NextResponse.json(
+          {
+            error: `הגעת למגבלת התורים המותרת לחודש (${maxMonth} תורים בחודש).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     // Create appointment
     const appointment = await createAppointment({

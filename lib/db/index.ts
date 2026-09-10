@@ -57,12 +57,36 @@ function hydrateAppointment(
 // BUSINESSES
 // ==============================================================================
 
+export function normalizeBusinessRecord(raw: any): Business {
+  if (!raw) return raw;
+  const wh = (raw.working_hours || {}) as Record<string, any>;
+  const settings = raw.settings || wh._settings || {
+    show_price_and_duration: true,
+    waiting_list_enabled: true,
+    show_hebrew_dates: false,
+    min_notice_hours: 1,
+    max_future_days: 60,
+    cancellation_cutoff_hours: 6,
+    max_active_appointments_per_client: 3,
+  };
+  const slot_interval_minutes =
+    raw.slot_interval_minutes || wh._slot_interval_minutes || 15;
+  const date_overrides = raw.date_overrides || wh._date_overrides || [];
+
+  return {
+    ...raw,
+    settings,
+    slot_interval_minutes,
+    date_overrides,
+  };
+}
+
 export async function getBusinesses(): Promise<Business[]> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.from("businesses").select("*");
-    if (!error && data) return data as Business[];
+    if (!error && data) return data.map(normalizeBusinessRecord);
   }
-  return [...db.businesses];
+  return db.businesses.map(normalizeBusinessRecord);
 }
 
 export async function getBusinessBySlug(slug: string): Promise<Business | null> {
@@ -72,9 +96,10 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
       .select("*")
       .eq("slug", slug)
       .single();
-    if (!error && data) return data as Business;
+    if (!error && data) return normalizeBusinessRecord(data);
   }
-  return db.businesses.find((b) => b.slug === slug) || null;
+  const found = db.businesses.find((b) => b.slug === slug);
+  return found ? normalizeBusinessRecord(found) : null;
 }
 
 export async function getBusinessById(id: string): Promise<Business | null> {
@@ -84,9 +109,10 @@ export async function getBusinessById(id: string): Promise<Business | null> {
       .select("*")
       .eq("id", id)
       .single();
-    if (!error && data) return data as Business;
+    if (!error && data) return normalizeBusinessRecord(data);
   }
-  return db.businesses.find((b) => b.id === id) || null;
+  const found = db.businesses.find((b) => b.id === id);
+  return found ? normalizeBusinessRecord(found) : null;
 }
 
 export async function loginBusiness(
@@ -128,7 +154,7 @@ export async function loginBusiness(
           .select("*")
           .ilike("owner_email", email.trim())
           .maybeSingle();
-        if (data) return data as Business;
+        if (data) return normalizeBusinessRecord(data);
       }
       if (googleId) {
         const { data } = await client
@@ -136,7 +162,7 @@ export async function loginBusiness(
           .select("*")
           .eq("google_id", googleId)
           .maybeSingle();
-        if (data) return data as Business;
+        if (data) return normalizeBusinessRecord(data);
       }
     }
 
@@ -145,7 +171,7 @@ export async function loginBusiness(
         (googleId && b.google_id === googleId) ||
         (email && b.owner_email?.toLowerCase() === email.toLowerCase())
     );
-    if (foundByGoogle) return foundByGoogle;
+    if (foundByGoogle) return normalizeBusinessRecord(foundByGoogle);
   }
 
   if (!phone || !password) return null;
@@ -161,7 +187,7 @@ export async function loginBusiness(
     if (!error && data) {
       // ONLY password allowed (PIN is canceled)
       if (data.password && data.password === password) {
-        return data as Business;
+        return normalizeBusinessRecord(data);
       }
     }
   }
@@ -172,7 +198,7 @@ export async function loginBusiness(
 
   if (found) {
     if (found.password && found.password === password) {
-      return found;
+      return normalizeBusinessRecord(found);
     }
   }
   return null;
@@ -180,36 +206,63 @@ export async function loginBusiness(
 
 export async function updateBusiness(
   id: string,
-  updates: Partial<
-    Pick<
-      Business,
-      | "name"
-      | "owner_phone"
-      | "owner_email"
-      | "password"
-      | "google_id"
-      | "working_hours"
-      | "slot_interval_minutes"
-      | "date_overrides"
-      | "pin"
-    >
-  >
+  updates: Partial<Business>
 ): Promise<Business | null> {
+  const existing = await getBusinessById(id);
+  const currentWh = ((existing?.working_hours as any) || {}) as Record<string, any>;
+
+  // Merge working_hours with nested _settings, _slot_interval_minutes, _date_overrides for Supabase jsonb persistence
+  const nextWh = {
+    ...(updates.working_hours || currentWh),
+    _settings:
+      updates.settings !== undefined
+        ? updates.settings
+        : (currentWh._settings || existing?.settings),
+    _slot_interval_minutes:
+      updates.slot_interval_minutes !== undefined
+        ? updates.slot_interval_minutes
+        : (currentWh._slot_interval_minutes || existing?.slot_interval_minutes),
+    _date_overrides:
+      updates.date_overrides !== undefined
+        ? updates.date_overrides
+        : (currentWh._date_overrides || existing?.date_overrides),
+  };
+
+  const payload: Record<string, any> = {
+    working_hours: nextWh,
+  };
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.owner_phone !== undefined) payload.owner_phone = updates.owner_phone;
+  if (updates.owner_email !== undefined) payload.owner_email = updates.owner_email;
+  if (updates.password !== undefined) payload.password = updates.password;
+  if (updates.google_id !== undefined) payload.google_id = updates.google_id;
+  if (updates.pin !== undefined) payload.pin = updates.pin;
+
   if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
     const client = supabaseAdmin || supabase!;
     const { data, error } = await client
       .from("businesses")
-      .update(updates)
+      .update(payload)
       .eq("id", id)
       .select()
       .single();
-    if (!error && data) return data as Business;
+    if (!error && data) {
+      return normalizeBusinessRecord(data);
+    }
+    if (error) {
+      console.error("Supabase updateBusiness error:", error);
+    }
   }
 
   const idx = db.businesses.findIndex((b) => b.id === id);
   if (idx !== -1) {
-    db.businesses[idx] = { ...db.businesses[idx], ...updates };
-    return db.businesses[idx];
+    db.businesses[idx] = {
+      ...db.businesses[idx],
+      ...updates,
+      working_hours: nextWh as any,
+      settings: updates.settings || db.businesses[idx].settings,
+    };
+    return normalizeBusinessRecord(db.businesses[idx]);
   }
   return null;
 }

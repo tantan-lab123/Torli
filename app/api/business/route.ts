@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBusinesses, getBusinessBySlug, getBusinessById, updateBusiness } from "@/lib/db";
-import { validatePassword } from "@/lib/utils";
+import { validatePassword, generateRandomSlug } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,7 @@ export async function PATCH(request: NextRequest) {
       working_hours,
       slot_interval_minutes,
       date_overrides,
+      settings,
       pin,
     } = body;
 
@@ -73,6 +74,7 @@ export async function PATCH(request: NextRequest) {
         ? { slot_interval_minutes: Number(slot_interval_minutes) }
         : {}),
       ...(date_overrides !== undefined ? { date_overrides } : {}),
+      ...(settings !== undefined ? { settings } : {}),
       ...(pin ? { pin } : {}),
     });
 
@@ -104,9 +106,14 @@ export async function POST(request: NextRequest) {
       slot_interval_minutes,
     } = body;
 
-    if (!name || !slug || !owner_phone) {
+    let finalSlug = typeof slug === "string" ? slug.trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    if (!finalSlug) {
+      finalSlug = generateRandomSlug(6);
+    }
+
+    if (!name || !owner_phone) {
       return NextResponse.json(
-        { error: "יש למלא שם עסק, מזהה קישור (סלאג) ומספר טלפון" },
+        { error: "יש למלא שם עסק ומספר טלפון" },
         { status: 400 }
       );
     }
@@ -133,8 +140,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if slug already exists
-    const existing = await getBusinessBySlug(slug);
+    // Check if slug already exists; if randomly generated and collision, re-roll once
+    let existing = await getBusinessBySlug(finalSlug);
+    if (existing && !slug) {
+      finalSlug = generateRandomSlug(6);
+      existing = await getBusinessBySlug(finalSlug);
+    }
+
     if (existing) {
       return NextResponse.json(
         { error: "מזהה קישור (Slug) זה כבר תפוס במערכת. אנא בחר סיומת אחרת." },
@@ -145,7 +157,7 @@ export async function POST(request: NextRequest) {
     const { createBusiness } = await import("@/lib/db");
     const newBusiness = await createBusiness({
       name,
-      slug,
+      slug: finalSlug,
       owner_phone,
       owner_email,
       password,
