@@ -371,6 +371,24 @@ export async function createBusiness(input: {
   return newBusiness;
 }
 
+export async function deleteBusiness(id: string): Promise<boolean> {
+  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+    const client = supabaseAdmin || supabase!;
+    // Delete associated appointments and services
+    await client.from("appointments").delete().eq("business_id", id);
+    await client.from("services").delete().eq("business_id", id);
+    const { error } = await client.from("businesses").delete().eq("id", id);
+    if (error) {
+      console.error("Supabase deleteBusiness error:", error);
+    }
+  }
+
+  db.appointments = db.appointments.filter((a) => a.business_id !== id);
+  db.services = db.services.filter((s) => s.business_id !== id);
+  db.businesses = db.businesses.filter((b) => b.id !== id);
+  return true;
+}
+
 // ==============================================================================
 // SERVICES
 // ==============================================================================

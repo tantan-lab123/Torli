@@ -13,11 +13,13 @@ import {
   Upload,
   Image as ImageIcon,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Business, BusinessSettings } from "@/lib/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { triggerHaptic } from "@/lib/utils";
 
 /**
@@ -66,15 +68,20 @@ interface SettingsSectionProps {
   business: Business;
   slotInterval: number;
   onUpdateSettings: (settings: Partial<Business>) => Promise<void>;
+  onDeleteBusiness?: () => Promise<void>;
 }
 
 export const SettingsSection: React.FC<SettingsSectionProps> = ({
   business,
   slotInterval,
   onUpdateSettings,
+  onDeleteBusiness,
 }) => {
   const [subTab, setSubTab] = useState<"general" | "controls" | "qrcode" | "sync">("general");
   const [copiedSyncUrl, setCopiedSyncUrl] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // General profile state
   const [name, setName] = useState(business.name);
@@ -855,6 +862,99 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           );
         })()}
       </form>
+
+      {/* Danger Zone: Permanent Business Deletion */}
+      {onDeleteBusiness && (
+        <Card className="p-6 border border-red-200/90 bg-red-50/40 rounded-3xl space-y-4 text-right mt-6">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <h3 className="font-extrabold text-sm text-red-950">
+              אזור סכנה: מחיקת בית העסק לצמיתות
+            </h3>
+          </div>
+          <p className="text-xs text-red-700 leading-relaxed">
+            מחיקת העסק הינה פעולה <strong>סופית ובלתי הפיכה</strong>. כל התורים שהוזמנו, רשימת השירותים, הגדרות העסק ודף הנחיתה של הלקוחות יימחקו לצמיתות ממסד הנתונים.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              triggerHaptic(20);
+              setDeleteConfirmText("");
+              setIsDeleteModalOpen(true);
+            }}
+            className="border-red-300 text-red-700 hover:bg-red-600 hover:text-white font-bold text-xs"
+          >
+            <Trash2 className="w-4 h-4 ml-1.5" />
+            <span>מחק את בית העסק לצמיתות מהמערכת</span>
+          </Button>
+        </Card>
+      )}
+
+      {/* Confirmation Modal */}
+      {onDeleteBusiness && (
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => !isDeleting && setIsDeleteModalOpen(false)}
+          title="אישור מחיקת עסק לצמיתות"
+        >
+          <div className="space-y-4 text-right">
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-800 space-y-1.5">
+              <span className="font-extrabold text-red-950 block">אזהרה קריטית:</span>
+              <p>
+                אתה עומד למחוק את העסק <strong>&quot;{business.name}&quot;</strong>.
+              </p>
+              <p>
+                פעולה זו תמחק לחלוטין את כל התורים, השירותים ופרטי הגישה. לא ניתן יהיה לשחזר את המידע לאחר המחיקה.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                אנא הקלד <span className="font-mono text-red-600 font-extrabold">{business.name}</span> לאישור סופי:
+              </label>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={business.name}
+                className="text-right"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="flex-1"
+              >
+                ביטול
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (deleteConfirmText.trim() !== business.name.trim()) return;
+                  triggerHaptic(50);
+                  setIsDeleting(true);
+                  try {
+                    await onDeleteBusiness();
+                    setIsDeleteModalOpen(false);
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                disabled={deleteConfirmText.trim() !== business.name.trim() || isDeleting}
+                isLoading={isDeleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold"
+              >
+                <Trash2 className="w-4 h-4 ml-1.5" />
+                <span>אישור מחיקה סופית</span>
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

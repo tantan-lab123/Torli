@@ -177,3 +177,40 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl;
+    let id = searchParams.get("id");
+
+    if (!id) {
+      try {
+        const body = await request.json();
+        id = body?.id;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "חסר מזהה עסק למחיקה" },
+        { status: 400 }
+      );
+    }
+
+    const { deleteBusiness } = await import("@/lib/db");
+    await deleteBusiness(id);
+
+    return NextResponse.json({
+      success: true,
+      message: "העסק וכל הנתונים המקושרים אליו נמחקו לצמיתות בהצלחה",
+    });
+  } catch (error) {
+    console.error("Error deleting business:", error);
+    return NextResponse.json(
+      { error: "שגיאה במחיקת העסק מהמערכת" },
+      { status: 500 }
+    );
+  }
+}

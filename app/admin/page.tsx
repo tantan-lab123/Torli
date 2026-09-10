@@ -30,7 +30,14 @@ import {
   Appointment,
   DayOfWeek,
   DateOverride,
+  Employee,
+  Product,
+  MarketingMessage,
+  Client,
+  WorkingHours,
+  DayHours,
 } from "@/lib/types";
+import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -83,7 +90,6 @@ import {
   DEFAULT_PRODUCTS,
   DEFAULT_MARKETING_MESSAGES,
 } from "@/lib/mock-saas";
-import { Employee, Product, MarketingMessage, Client } from "@/lib/types";
 
 const ADMIN_SESSION_KEY = "schedule_active_business_slug_v2";
 
@@ -98,11 +104,15 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("calendar");
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
 
-  // SaaS domain collections
-  const [employees, setEmployees] = useState<Employee[]>(DEFAULT_EMPLOYEES.default);
+  // SaaS domain collections - start empty for new businesses!
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS.default);
   const [marketingMessages, setMarketingMessages] = useState<MarketingMessage[]>(DEFAULT_MARKETING_MESSAGES);
   const [customClients, setCustomClients] = useState<Client[]>([]);
+
+  // Onboarding / Setup Wizard state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Unique CRM Clients computed from appointments + custom created clients
   const clients = useMemo(() => {
@@ -164,6 +174,8 @@ export default function AdminDashboardPage() {
   const [regCategory, setRegCategory] = useState<"barber" | "nails" | "therapy" | "general">("barber");
   const [isRegistering, setIsRegistering] = useState(false);
   const [regError, setRegError] = useState("");
+  const [isOnboardingHours, setIsOnboardingHours] = useState(false);
+  const [isSavingOnboardingHours, setIsSavingOnboardingHours] = useState(false);
 
   // Real-time password validation for registration
   const passwordValidation = useMemo(() => {
@@ -195,26 +207,34 @@ export default function AdminDashboardPage() {
   const [editingInterval, setEditingInterval] = useState<number>(15);
   const [editingOverrides, setEditingOverrides] = useState<DateOverride[]>([]);
 
-  // Restore authenticated session from localStorage
+  // Restore saved session on mount
   useEffect(() => {
     const restoreSession = async () => {
+      // If user explicitly logged out in this browser session, do not auto-restore!
+      if (sessionStorage.getItem("torli_user_logged_out") === "true") {
+        setIsLoading(false);
+        return;
+      }
+
+      const savedSlug = localStorage.getItem(ADMIN_SESSION_KEY);
+      if (!savedSlug) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        setIsLoading(true);
-        const savedSlug = localStorage.getItem(ADMIN_SESSION_KEY);
-        if (savedSlug) {
-          const res = await fetch(`/api/business?slug=${savedSlug}`);
-          if (res.ok) {
-            const biz: Business = await res.json();
-            setSelectedBusiness(biz);
-            setEditingWorkingHours(biz.working_hours);
-            setEditingInterval(biz.slot_interval_minutes || 15);
-            setEditingOverrides(biz.date_overrides || []);
-          } else {
-            localStorage.removeItem(ADMIN_SESSION_KEY);
-          }
+        const res = await fetch(`/api/business?slug=${savedSlug}`);
+        if (res.ok) {
+          const biz = await res.json();
+          setSelectedBusiness(biz);
+          setEditingWorkingHours(biz.working_hours);
+          setEditingInterval(biz.slot_interval_minutes || 15);
+          setEditingOverrides(biz.date_overrides || []);
+        } else {
+          localStorage.removeItem(ADMIN_SESSION_KEY);
         }
       } catch (err) {
-        console.error("Session restore error:", err);
+        console.error("Failed to restore admin session:", err);
       } finally {
         setIsLoading(false);
       }
@@ -228,6 +248,11 @@ export default function AdminDashboardPage() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // If user explicitly logged out, do NOT auto-login from cached session!
+        if (sessionStorage.getItem("torli_user_logged_out") === "true") {
+          return;
+        }
+
         if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user?.email && !selectedBusiness) {
           try {
             setIsLoggingIn(true);
@@ -284,6 +309,7 @@ export default function AdminDashboardPage() {
 
   // Handle Private Owner Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
+    sessionStorage.removeItem("torli_user_logged_out");
     e.preventDefault();
     setLoginError("");
     setIsLoggingIn(true);
@@ -330,6 +356,7 @@ export default function AdminDashboardPage() {
 
   // Handle Google Sign-in for Business Owner
   const handleGoogleOwnerLogin = async () => {
+    sessionStorage.removeItem("torli_user_logged_out");
     setLoginError("");
     setIsLoggingIn(true);
     triggerHaptic(20);
@@ -373,10 +400,7 @@ export default function AdminDashboardPage() {
 
   // Handle Logout
   const handleLogout = async () => {
-    setSelectedBusiness(null);
-    setGoogleUser(null);
-    localStorage.removeItem(ADMIN_SESSION_KEY);
-    setLoginPassword("");
+    sessionStorage.setItem("torli_user_logged_out", "true");
     if (supabase) {
       try {
         await supabase.auth.signOut();
@@ -384,7 +408,35 @@ export default function AdminDashboardPage() {
         // ignore
       }
     }
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    setLoginPassword("");
+    setGoogleUser(null);
+    setSelectedBusiness(null);
     triggerHaptic(25);
+  };
+
+  // Permanent Delete Business
+  const handleDeleteBusiness = async () => {
+    if (!selectedBusiness) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/business?id=${selectedBusiness.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        triggerHaptic(50);
+        await handleLogout();
+        alert("העסק וכל נתוניו נמחקו לצמיתות מהמערכת.");
+      } else {
+        const d = await res.json();
+        alert(d.error || "שגיאה במחיקת העסק");
+      }
+    } catch (err) {
+      console.error("Error deleting business:", err);
+      alert("שגיאת תקשורת במחיקת העסק");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Business name change in registration form
@@ -447,6 +499,7 @@ export default function AdminDashboardPage() {
       setEditingInterval(biz.slot_interval_minutes || 15);
       setEditingOverrides(biz.date_overrides || []);
       localStorage.setItem(ADMIN_SESSION_KEY, biz.slug);
+      setIsOnboardingHours(true);
       triggerHaptic(50);
     } catch (err) {
       console.error(err);
@@ -483,6 +536,27 @@ export default function AdminDashboardPage() {
       fetchAppointments();
     }
   }, [selectedBusiness, fetchAppointments]);
+
+  // Load employees specific to this business (never mock staff for real new businesses!)
+  useEffect(() => {
+    if (!selectedBusiness) {
+      setEmployees([]);
+      return;
+    }
+    const saved = localStorage.getItem(`torli_employees_${selectedBusiness.id}`);
+    if (saved) {
+      try {
+        setEmployees(JSON.parse(saved));
+        return;
+      } catch {}
+    }
+    // Only pre-populate if demo business
+    if (selectedBusiness.id === "b-barber-1" || selectedBusiness.slug === "barber-dan") {
+      setEmployees(DEFAULT_EMPLOYEES.default || []);
+    } else {
+      setEmployees([]);
+    }
+  }, [selectedBusiness?.id, selectedBusiness?.slug]);
 
   // Appointments for the selected day
   const dailyAppointments = useMemo(() => {
@@ -1233,13 +1307,210 @@ export default function AdminDashboardPage() {
                   <Sparkles className="w-4 h-4 ml-2" />
                   <span>
                     {googleUser
-                      ? "פתח את היומן שלי עכשיו 🚀"
-                      : "פתח עסק וכנס ישירות ליומן"}
+                      ? "המשך להגדרת שעות פעילות 🚀"
+                      : "המשך להגדרת שעות פעילות"}
                   </span>
                 </Button>
               </form>
             </Card>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // ONBOARDING STEP 2: SET OPERATING HOURS
+  // =========================================================================
+  if (isOnboardingHours && selectedBusiness) {
+    const dayLabels: Record<DayOfWeek, string> = {
+      sunday: "יום ראשון",
+      monday: "יום שני",
+      tuesday: "יום שלישי",
+      wednesday: "יום רביעי",
+      thursday: "יום חמישי",
+      friday: "יום שישי",
+      saturday: "יום שבת",
+    };
+
+    return (
+      <div className="min-h-screen bg-slate-50 py-10 px-4">
+        <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3.5 py-1 rounded-full text-xs font-black shadow-2xs">
+              <span>שלב 2 מתוך 2</span>
+              <span>•</span>
+              <span>הגדרת שעות פתיחה לעסק</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
+              ברוך הבא ל-Torli, {selectedBusiness.name}! 🎉
+            </h1>
+            <p className="text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
+              העסק נוצר בהצלחה! כעת בחר באילו ימים ושעות העסק שלך יהיה פתוח לקבלת תורים מלקוחות.
+            </p>
+          </div>
+
+          {/* Weekly Schedule Card */}
+          <Card className="p-6 bg-white border border-slate-200 shadow-sm rounded-3xl space-y-5 text-right">
+            {/* Preset shortcuts */}
+            <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100">
+              <span className="text-xs font-bold text-slate-500">תבניות מהירות:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(15);
+                  setEditingWorkingHours({
+                    sunday: { active: true, open: "09:00", close: "19:00", lunch_break: { active: true, start: "13:00", end: "14:00" } },
+                    monday: { active: true, open: "09:00", close: "19:00", lunch_break: { active: true, start: "13:00", end: "14:00" } },
+                    tuesday: { active: true, open: "09:00", close: "19:00", lunch_break: { active: true, start: "13:00", end: "14:00" } },
+                    wednesday: { active: true, open: "09:00", close: "19:00", lunch_break: { active: true, start: "13:00", end: "14:00" } },
+                    thursday: { active: true, open: "09:00", close: "20:00", lunch_break: { active: true, start: "13:00", end: "14:00" } },
+                    friday: { active: true, open: "08:30", close: "14:00", lunch_break: { active: false, start: "12:00", end: "12:30" } },
+                    saturday: { active: false, open: "00:00", close: "00:00" },
+                  });
+                }}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 transition-colors"
+              >
+                שבוע סטנדרטי (א׳-ה׳ 09:00-19:00, ו׳ עד 14:00)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(15);
+                  setEditingWorkingHours({
+                    sunday: { active: true, open: "10:00", close: "20:00" },
+                    monday: { active: true, open: "10:00", close: "20:00" },
+                    tuesday: { active: true, open: "10:00", close: "20:00" },
+                    wednesday: { active: true, open: "10:00", close: "20:00" },
+                    thursday: { active: true, open: "10:00", close: "20:00" },
+                    friday: { active: false, open: "00:00", close: "00:00" },
+                    saturday: { active: false, open: "00:00", close: "00:00" },
+                  });
+                }}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 transition-colors"
+              >
+                ימי חול בלבד (א׳-ה׳ 10:00-20:00)
+              </button>
+            </div>
+
+            {/* Days list */}
+            <div className="space-y-3">
+              {(["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as DayOfWeek[]).map((day) => {
+                const cfg = editingWorkingHours?.[day] || { active: true, open: "09:00", close: "19:00" };
+
+                return (
+                  <div
+                    key={day}
+                    className={cn(
+                      "p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3",
+                      cfg.active ? "bg-white border-slate-200 shadow-2xs" : "bg-slate-50/80 border-slate-200/60 opacity-60"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={cfg.active}
+                        onChange={(e) => {
+                          setEditingWorkingHours((prev) => {
+                            const base = prev || (selectedBusiness?.working_hours as WorkingHours);
+                            return {
+                              ...base,
+                              [day]: { ...cfg, active: e.target.checked },
+                            };
+                          });
+                        }}
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm font-bold text-slate-800 w-24">
+                        {dayLabels[day]}
+                      </span>
+                      {!cfg.active && (
+                        <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                          סגור ביום זה
+                        </span>
+                      )}
+                    </div>
+
+                    {cfg.active && (
+                      <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                        <span className="text-slate-400 font-medium">פתיחה:</span>
+                        <input
+                          type="time"
+                          value={cfg.open}
+                          onChange={(e) => {
+                            setEditingWorkingHours((prev) => {
+                              const base = prev || (selectedBusiness?.working_hours as WorkingHours);
+                              return {
+                                ...base,
+                                [day]: { ...cfg, open: e.target.value },
+                              };
+                            });
+                          }}
+                          className="border border-slate-200 rounded-xl px-2.5 py-1 text-slate-800 font-bold bg-white"
+                        />
+                        <span className="text-slate-400 font-medium">סגירה:</span>
+                        <input
+                          type="time"
+                          value={cfg.close}
+                          onChange={(e) => {
+                            setEditingWorkingHours((prev) => {
+                              const base = prev || (selectedBusiness?.working_hours as WorkingHours);
+                              return {
+                                ...base,
+                                [day]: { ...cfg, close: e.target.value },
+                              };
+                            });
+                          }}
+                          className="border border-slate-200 rounded-xl px-2.5 py-1 text-slate-800 font-bold bg-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-xs text-slate-400">
+                השעות יישמרו ותוכל לעדכן אותן תמיד דרך אזור &quot;שעות פעילות&quot;.
+              </span>
+              <Button
+                type="button"
+                size="lg"
+                isLoading={isSavingOnboardingHours}
+                onClick={async () => {
+                  triggerHaptic(40);
+                  setIsSavingOnboardingHours(true);
+                  try {
+                    const res = await fetch("/api/business", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        id: selectedBusiness.id,
+                        working_hours: editingWorkingHours,
+                      }),
+                    });
+                    if (res.ok) {
+                      const updated = await res.json();
+                      setSelectedBusiness(updated);
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setIsSavingOnboardingHours(false);
+                    setIsOnboardingHours(false);
+                    confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+                  }
+                }}
+                className="w-full sm:w-auto shadow-lg shadow-indigo-600/25 px-8"
+              >
+                <Sparkles className="w-4 h-4 ml-2" />
+                <span>שמור שעות והיכנס ליומן 🚀</span>
+              </Button>
+            </div>
+          </Card>
         </div>
       </div>
     );
@@ -1924,17 +2195,33 @@ export default function AdminDashboardPage() {
               services={services}
               businessId={selectedBusiness.id}
               onAddEmployee={(newEmp) => {
-                setEmployees((prev) => [newEmp as Employee, ...prev]);
+                setEmployees((prev) => {
+                  const updated = [newEmp as Employee, ...prev];
+                  if (selectedBusiness) {
+                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
+                  }
+                  return updated;
+                });
               }}
               onToggleVisibility={(empId) => {
-                setEmployees((prev) =>
-                  prev.map((e) =>
+                setEmployees((prev) => {
+                  const updated = prev.map((e) =>
                     e.id === empId ? { ...e, is_visible_online: !e.is_visible_online } : e
-                  )
-                );
+                  );
+                  if (selectedBusiness) {
+                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
+                  }
+                  return updated;
+                });
               }}
               onDeleteEmployee={(empId) => {
-                setEmployees((prev) => prev.filter((e) => e.id !== empId));
+                setEmployees((prev) => {
+                  const updated = prev.filter((e) => e.id !== empId);
+                  if (selectedBusiness) {
+                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
+                  }
+                  return updated;
+                });
               }}
             />
           </div>
@@ -2028,6 +2315,7 @@ export default function AdminDashboardPage() {
                   setSelectedBusiness(updated);
                 }
               }}
+              onDeleteBusiness={handleDeleteBusiness}
             />
           </div>
         )}
