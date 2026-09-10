@@ -51,6 +51,7 @@ import {
   triggerHaptic,
   cn,
   validatePassword,
+  validatePhoneNumber,
   formatJewishDate,
   getJewishHolidayOrShabbat,
   getHebrewDayLetter,
@@ -457,6 +458,12 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    const phoneCheck = validatePhoneNumber(regPhone);
+    if (!phoneCheck.isValid) {
+      setRegError(phoneCheck.error || "מספר טלפון בעל העסק חייב להכיל בדיוק 10 ספרות");
+      return;
+    }
+
     if (!googleUser) {
       if (!regPassword.trim()) {
         setRegError("יש להגדיר סיסמה מאובטחת לבעל העסק");
@@ -802,6 +809,17 @@ export default function AdminDashboardPage() {
     const dateStr = format(selectedDate, "yyyy-MM-dd");
     const startIso = new Date(`${dateStr}T${walkinTime}:00`).toISOString();
 
+    let finalPhone = "0500000000";
+    if (walkinPhone.trim()) {
+      const phoneCheck = validatePhoneNumber(walkinPhone);
+      if (!phoneCheck.isValid) {
+        alert(phoneCheck.error || "מספר טלפון לקוח לא תקין (חייב להכיל 10 ספרות בדיוק)");
+        setIsSubmittingWalkin(false);
+        return;
+      }
+      finalPhone = phoneCheck.cleaned;
+    }
+
     try {
       const res = await fetch("/api/appointments", {
         method: "POST",
@@ -809,7 +827,7 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({
           business_id: selectedBusiness.id,
           service_id: walkinServiceId,
-          phone: walkinPhone.replace(/\D/g, "") || "0500000000",
+          phone: finalPhone,
           first_name: walkinFirstName.trim() || "לקוח",
           last_name: walkinLastName.trim() || "מזדמן",
           start_time: startIso,
@@ -1181,11 +1199,28 @@ export default function AdminDashboardPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <Input
-                    label="טלפון נייד בעל העסק *"
+                    label="טלפון נייד בעל העסק (10 ספרות) *"
                     type="tel"
+                    maxLength={12}
                     placeholder="054-0001122"
+                    dir="ltr"
+                    className="text-right font-medium"
                     value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      let formatted = digits;
+                      if (digits.length > 3) {
+                        formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                      }
+                      setRegPhone(formatted);
+                    }}
+                    helperText={
+                      regPhone.replace(/\D/g, "").length === 10
+                        ? "✓ 10 ספרות תקינות"
+                        : regPhone.replace(/\D/g, "").length > 0
+                        ? `חסרות ספרות (${regPhone.replace(/\D/g, "").length}/10)`
+                        : undefined
+                    }
                     required
                   />
                   <Input
@@ -2367,11 +2402,28 @@ export default function AdminDashboardPage() {
           </div>
 
           <Input
-            label="טלפון נייד"
+            label="טלפון נייד (10 ספרות)"
             type="tel"
+            maxLength={12}
             placeholder="050-1234567"
+            dir="ltr"
+            className="text-right font-medium"
             value={walkinPhone}
-            onChange={(e) => setWalkinPhone(e.target.value)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+              let formatted = digits;
+              if (digits.length > 3) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+              }
+              setWalkinPhone(formatted);
+            }}
+            helperText={
+              walkinPhone.replace(/\D/g, "").length === 10
+                ? "✓ 10 ספרות תקינות"
+                : walkinPhone.replace(/\D/g, "").length > 0
+                ? `יש להזין 10 ספרות (${walkinPhone.replace(/\D/g, "").length}/10)`
+                : "אופציונלי למזדמנים"
+            }
           />
 
           <div>

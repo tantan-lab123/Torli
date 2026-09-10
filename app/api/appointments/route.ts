@@ -23,7 +23,15 @@ export const dynamic = "force-dynamic";
 const bookingSchema = z.object({
   business_id: z.string().min(1, "חסר מזהה עסק"),
   service_id: z.string().min(1, "יש לבחור שירות"),
-  phone: z.string().min(9, "מספר טלפון לא תקין"),
+  phone: z
+    .string()
+    .transform((val) => val.replace(/\D/g, ""))
+    .refine((val) => val.length === 10, {
+      message: "מספר הטלפון חייב להכיל בדיוק 10 ספרות (לדוגמה: 0501234567)",
+    })
+    .refine((val) => val.startsWith("0"), {
+      message: "מספר טלפון ישראלי חייב להתחיל בספרה 0",
+    }),
   first_name: z.string().min(2, "יש להזין שם פרטי"),
   last_name: z.string().min(2, "יש להזין שם משפחה"),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),

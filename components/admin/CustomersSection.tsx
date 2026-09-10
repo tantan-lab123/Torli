@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { formatPhone, toInternationalPhone, formatTime, formatHebrewDate, triggerHaptic } from "@/lib/utils";
+import { formatPhone, toInternationalPhone, formatTime, formatHebrewDate, triggerHaptic, validatePhoneNumber } from "@/lib/utils";
 
 interface CustomersSectionProps {
   clients: Client[];
@@ -48,6 +48,7 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newPhoneError, setNewPhoneError] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
   const [newNotes, setNewNotes] = useState("");
@@ -109,13 +110,20 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
     e.preventDefault();
     if (!newFirstName.trim() || !newPhone.trim()) return;
 
+    const phoneCheck = validatePhoneNumber(newPhone);
+    if (!phoneCheck.isValid) {
+      setNewPhoneError(phoneCheck.error || "מספר טלפון חייב להכיל בדיוק 10 ספרות");
+      triggerHaptic(40);
+      return;
+    }
+
     triggerHaptic(25);
     const newClient: Partial<Client> = {
       id: "cli-" + Math.random().toString(36).substring(2, 9),
       business_id: businessId,
       first_name: newFirstName.trim(),
       last_name: newLastName.trim(),
-      phone: newPhone.trim(),
+      phone: phoneCheck.cleaned,
       email: newEmail.trim() || undefined,
       birthday: newBirthday.trim() || undefined,
       notes: newNotes.trim() || undefined,
@@ -129,6 +137,7 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
     setNewFirstName("");
     setNewLastName("");
     setNewPhone("");
+    setNewPhoneError("");
     setNewEmail("");
     setNewBirthday("");
     setNewNotes("");
@@ -424,13 +433,32 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
           </div>
 
           <Input
-            label="מספר טלפון נייד *"
+            label="מספר טלפון נייד (10 ספרות) *"
             type="tel"
+            maxLength={12}
             placeholder="054-1234567"
             dir="ltr"
-            className="text-right"
+            className="text-right font-medium"
             value={newPhone}
-            onChange={(e) => setNewPhone(e.target.value)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+              let formatted = digits;
+              if (digits.length > 3) {
+                formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+              }
+              setNewPhone(formatted);
+              if (newPhoneError) setNewPhoneError("");
+            }}
+            error={newPhoneError}
+            helperText={
+              newPhoneError
+                ? undefined
+                : newPhone.replace(/\D/g, "").length === 10
+                ? "✓ מספר טלפון תקין (10 ספרות)"
+                : newPhone.replace(/\D/g, "").length > 0
+                ? `יש להזין בדיוק 10 ספרות (${newPhone.replace(/\D/g, "").length}/10)`
+                : "הזן 10 ספרות"
+            }
             required
           />
 

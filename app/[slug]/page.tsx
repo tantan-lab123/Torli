@@ -31,6 +31,7 @@ import {
   formatJewishDate,
   getJewishHolidayOrShabbat,
   getHebrewDayLetter,
+  validatePhoneNumber,
 } from "@/lib/utils";
 import {
   addMonths,
@@ -262,17 +263,38 @@ export default function BookingPage() {
     }
   }, [phone, business]);
 
+  // Handle Phone input change with automatic 10-digit cap and formatting
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digits = raw.replace(/\D/g, "");
+    // Cap at exactly 10 digits max
+    const trimmed = digits.slice(0, 10);
+    let formatted = trimmed;
+    if (trimmed.length > 3) {
+      formatted = `${trimmed.slice(0, 3)}-${trimmed.slice(3)}`;
+    }
+    setPhone(formatted);
+    if (formErrors.phone) {
+      setFormErrors((prev) => {
+        const next = { ...prev };
+        delete next.phone;
+        return next;
+      });
+    }
+  };
+
   // Handle Form Submission
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business || !selectedService || !selectedSlot) return;
 
     const errors: { [key: string]: string } = {};
-    const cleanedPhone = phone.replace(/\D/g, "");
+    const phoneCheck = validatePhoneNumber(phone);
 
-    if (cleanedPhone.length < 9) {
-      errors.phone = "אנא הזן מספר טלפון נייד תקין";
+    if (!phoneCheck.isValid) {
+      errors.phone = phoneCheck.error || "מספר הטלפון חייב להכיל בדיוק 10 ספרות";
     }
+    const cleanedPhone = phoneCheck.cleaned;
     if (!firstName.trim()) {
       errors.firstName = "שם פרטי הוא שדה חובה";
     }
@@ -1006,22 +1028,36 @@ export default function BookingPage() {
             )}
 
             <form onSubmit={handleBookingSubmit} className="space-y-4">
-              {/* Phone Input with Auto-completion indicator */}
+              {/* Phone Input with Auto-completion indicator & Live 10-digit verification */}
               <div className="relative">
                 <Input
-                  label="מספר טלפון נייד *"
+                  label="מספר טלפון נייד (10 ספרות) *"
                   type="tel"
+                  maxLength={12}
                   placeholder="050-1234567"
                   dir="ltr"
-                  className="text-right font-medium text-lg"
+                  className="text-right font-semibold text-lg tracking-wider"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={handlePhoneChange}
                   error={formErrors.phone}
-                  helperText="הזן מספר לקבלת תזכורת בוואטסאפ"
+                  helperText={
+                    formErrors.phone
+                      ? undefined
+                      : phone.replace(/\D/g, "").length === 10
+                      ? "✓ מספר טלפון תקין (10 ספרות)"
+                      : phone.replace(/\D/g, "").length > 0
+                      ? `יש להזין בדיוק 10 ספרות (${phone.replace(/\D/g, "").length}/10)`
+                      : "הזן 10 ספרות לקבלת אישור ותזכורת בוואטסאפ"
+                  }
                 />
                 {isClientLookupLoading && (
                   <div className="absolute left-3 top-10">
                     <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {!isClientLookupLoading && phone.replace(/\D/g, "").length === 10 && (
+                  <div className="absolute left-3 top-10 text-emerald-600 animate-in fade-in zoom-in-75 duration-200">
+                    <CheckCircle2 className="w-5 h-5" />
                   </div>
                 )}
               </div>

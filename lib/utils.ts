@@ -30,6 +30,64 @@ export function toInternationalPhone(phone: string): string {
 }
 
 /**
+ * Strict Israeli phone number validation - exactly 10 digits
+ */
+export function validatePhoneNumber(phone: string): {
+  isValid: boolean;
+  cleaned: string;
+  formatted: string;
+  error?: string;
+} {
+  const cleaned = phone.replace(/\D/g, "");
+
+  if (!cleaned) {
+    return {
+      isValid: false,
+      cleaned,
+      formatted: phone,
+      error: "נא להזין מספר טלפון נייד",
+    };
+  }
+
+  if (cleaned.length < 10) {
+    const missing = 10 - cleaned.length;
+    return {
+      isValid: false,
+      cleaned,
+      formatted: phone,
+      error: `מספר הטלפון קצר מדי (${cleaned.length}/10 ספרות). חסרות ${missing} ספרות`,
+    };
+  }
+
+  if (cleaned.length > 10) {
+    const extra = cleaned.length - 10;
+    return {
+      isValid: false,
+      cleaned,
+      formatted: phone,
+      error: `מספר הטלפון ארוך מדי (${cleaned.length}/10 ספרות). יש להסיר ${extra} ספרות`,
+    };
+  }
+
+  if (!cleaned.startsWith("0")) {
+    return {
+      isValid: false,
+      cleaned,
+      formatted: phone,
+      error: "מספר טלפון ישראלי חייב להתחיל בספרה 0 (לדוגמה: 050...)",
+    };
+  }
+
+  // Format as 05X-XXXXXXX
+  const formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+  return {
+    isValid: true,
+    cleaned,
+    formatted,
+  };
+}
+
+/**
  * Format date in friendly Hebrew string (e.g., "יום חמישי, 10 בספטמבר")
  */
 export function formatHebrewDate(date: Date | string): string {
