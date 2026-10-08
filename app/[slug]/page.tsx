@@ -39,6 +39,7 @@ import {
 import {
   addMonths,
   subMonths,
+  addDays,
   format,
   isSameDay,
   isSameMonth,
@@ -68,7 +69,7 @@ export default function BookingPage() {
   const [notFound, setNotFound] = useState(false);
 
   // Flow State: 1 = Service, 2 = Date & Time, 3 = Details, 4 = Success
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
   // Selections
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -154,7 +155,7 @@ export default function BookingPage() {
                 setSelectedDate(d);
                 setCurrentMonth(d);
                 setSelectedSlot(pending.slot);
-                setStep(3);
+                setStep(4);
               }
               sessionStorage.removeItem(PENDING_KEY);
             }
@@ -187,6 +188,11 @@ export default function BookingPage() {
       // ignore
     }
   }, []);
+
+  // Each step is its own page: always start it from the top
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [step]);
 
   // Real Google sign-in (Supabase Auth): prefill from the saved profile, or from the Google account
   useEffect(() => {
@@ -366,9 +372,10 @@ export default function BookingPage() {
   }, [business, selectedService, currentMonth, selectedDate]);
 
   // Handle user selecting a date on the calendar
-  const handleSelectDate = async (date: Date) => {
+  const handleSelectDate = async (date: Date, goToTimePage = true) => {
     triggerHaptic(15);
     setSelectedDate(date);
+    if (goToTimePage) setStep(3);
     setSelectedSlot(null);
     setWaitOpen(false);
     setWaitMsg(null);
@@ -394,6 +401,19 @@ export default function BookingPage() {
     } finally {
       setIsLoadingSlots(false);
     }
+  };
+
+  const findNeighborDay = (dir: 1 | -1): Date | null => {
+    const today = startOfToday();
+    const last = addDays(today, business?.settings?.max_future_days ?? 60);
+    for (let i = 1; i <= 62; i++) {
+      const d = addDays(selectedDate, dir * i);
+      if (isBefore(d, today) || isBefore(last, d)) return null;
+      const info = monthAvailability[format(d, "yyyy-MM-dd")];
+      // unknown month data: step one day and let it load; known closed days are skipped
+      if (info === undefined || info.isOpen) return d;
+    }
+    return null;
   };
 
   const handlePrevMonth = () => {
@@ -529,7 +549,7 @@ export default function BookingPage() {
       }
 
       setConfirmedAppointment(data.appointment);
-      setStep(4);
+      setStep(5);
       triggerHaptic(50);
 
       // Launch celebratory confetti
@@ -632,17 +652,18 @@ export default function BookingPage() {
       {/* Main Container - Mobile First Max Width */}
       <main className="max-w-md mx-auto px-4 pt-5 pb-36">
         {/* Progress Tracker (Steps 1, 2, 3) */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="mb-6">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
               <span className={step === 1 ? "text-indigo-600" : ""}>1. בחירת שירות</span>
-              <span className={step === 2 ? "text-indigo-600" : ""}>2. מועד ושעה</span>
-              <span className={step === 3 ? "text-indigo-600" : ""}>3. פרטים ואישור</span>
+              <span className={step === 2 ? "text-indigo-600" : ""}>2. תאריך</span>
+              <span className={step === 3 ? "text-indigo-600" : ""}>3. שעה</span>
+              <span className={step === 4 ? "text-indigo-600" : ""}>4. פרטים</span>
             </div>
             <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-indigo-600 transition-all duration-300 rounded-full"
-                style={{ width: `${(step / 3) * 100}%` }}
+                style={{ width: `${(step / 4) * 100}%` }}
               />
             </div>
           </div>
@@ -771,8 +792,10 @@ export default function BookingPage() {
             </div>
 
             <div className="text-right">
-              <h2 className="text-xl font-extrabold text-slate-900">בחר יום ושעה</h2>
-              <p className="text-sm text-slate-500">תורים פנויים מחושבים בזמן אמת</p>
+              <h2 className="text-xl font-extrabold text-slate-900">באיזה יום תרצה להגיע?</h2>
+              <p className="text-sm text-slate-500">
+                לחץ על היום הרצוי בלוח. בשלב הבא תבחר שעה.
+              </p>
             </div>
 
             {/* Full Month Interactive Calendar Card */}
@@ -856,7 +879,10 @@ export default function BookingPage() {
                   
                   // Has available slots check
                   const hasSlots = dayAvail ? dayAvail.hasSlots : false;
-                  const canSelect = !isPastDate && hasSlots;
+                  const isFullDay = !!dayAvail && dayAvail.isOpen && !dayAvail.hasSlots;
+                  const canSelect =
+                    !isPastDate &&
+                    (hasSlots || (isFullDay && business?.settings?.waiting_list_enabled !== false));
 
                   if (canSelect) {
                     return (
@@ -887,7 +913,9 @@ export default function BookingPage() {
                           </span>
                         )}
                         {/* Indicator: holiday dot or slot dot */}
-                        {holiday ? (
+                        {isFullDay ? (
+                          <span className="text-[9px] font-extrabold text-amber-600 leading-none mt-0.5">מלא</span>
+                        ) : holiday ? (
                           <span
                             className={cn(
                               "w-1.5 h-1.5 rounded-full mt-0.5",
@@ -957,6 +985,80 @@ export default function BookingPage() {
               </div>
             </Card>
 
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 3: PICK A TIME (own page, with previous / next day arrows) */}
+        {/* ========================================================================= */}
+        {step === 3 && (
+          <div className="space-y-5 pb-36 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setStep(2)}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>חזרה ללוח השנה</span>
+              </button>
+              <Badge variant="default">{selectedService?.name}</Badge>
+            </div>
+
+            <div className="text-right">
+              <h2 className="text-xl font-extrabold text-slate-900">באיזו שעה?</h2>
+              <p className="text-sm text-slate-500">אפשר לעבור ליום אחר בעזרת החצים</p>
+            </div>
+
+            {/* Day navigator: big, labelled buttons */}
+            {(() => {
+              const prevDay = findNeighborDay(-1);
+              const nextDay = findNeighborDay(1);
+              return (
+                <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+                  <button
+                    type="button"
+                    disabled={!prevDay}
+                    onClick={() => prevDay && handleSelectDate(prevDay, false)}
+                    className={cn(
+                      "rounded-2xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold transition-all",
+                      prevDay
+                        ? "border-slate-300 bg-white text-slate-800 hover:bg-indigo-50 hover:border-indigo-400 active:scale-95"
+                        : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                    )}
+                    aria-label="היום הקודם"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                    <span className="text-xs">היום הקודם</span>
+                  </button>
+
+                  <div className="rounded-2xl bg-indigo-600 text-white px-4 py-3 text-center min-w-[120px] flex flex-col justify-center shadow-md shadow-indigo-600/25">
+                    <span className="text-xs font-semibold text-indigo-100">
+                      {format(selectedDate, "EEEE", { locale: he })}
+                    </span>
+                    <span className="text-lg font-extrabold leading-tight">
+                      {format(selectedDate, "d בMMMM", { locale: he })}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!nextDay}
+                    onClick={() => nextDay && handleSelectDate(nextDay, false)}
+                    className={cn(
+                      "rounded-2xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold transition-all",
+                      nextDay
+                        ? "border-slate-300 bg-white text-slate-800 hover:bg-indigo-50 hover:border-indigo-400 active:scale-95"
+                        : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                    )}
+                    aria-label="היום הבא"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                    <span className="text-xs">היום הבא</span>
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* Selected Date Header */}
             <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 text-center text-sm font-semibold text-indigo-950 flex flex-col items-center justify-center gap-1.5 shadow-2xs">
               <div className="flex items-center gap-2">
@@ -991,7 +1093,7 @@ export default function BookingPage() {
                   {slotMessage || "אין שעות פנויות ביום זה"}
                 </h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  אנא בחר יום אחר מהרשימה שלמעלה כדי למצוא שעה נוחה
+                  השתמש בחצים שלמעלה כדי לעבור ליום אחר
                 </p>
 
                 {business.settings?.waiting_list_enabled !== false &&
@@ -1151,12 +1253,12 @@ export default function BookingPage() {
                 <Button
                   size="lg"
                   onClick={() => {
-                    if (selectedSlot) setStep(3);
+                    if (selectedSlot) setStep(4);
                   }}
                   disabled={!selectedSlot}
                   className="px-8 shadow-lg shadow-indigo-600/25"
                 >
-                  <span>המשך להזנת פרטים</span>
+                  <span>המשך לפרטים</span>
                   <ChevronLeft className="w-4 h-4 mr-1" />
                 </Button>
               </div>
@@ -1167,12 +1269,12 @@ export default function BookingPage() {
         {/* ========================================================================= */}
         {/* STEP 3: FRICTIONLESS CLIENT DETAILS */}
         {/* ========================================================================= */}
-        {step === 3 && (
+        {step === 4 && (
           <div className="space-y-5 animate-in fade-in duration-200">
             {/* Header with Back Button */}
             <div className="flex items-center justify-between">
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -1404,7 +1506,7 @@ export default function BookingPage() {
         {/* ========================================================================= */}
         {/* STEP 4: SUCCESS STATE */}
         {/* ========================================================================= */}
-        {step === 4 && confirmedAppointment && (
+        {step === 5 && confirmedAppointment && (
           <div className="space-y-6 text-center animate-in zoom-in-95 duration-300 py-4">
             {/* Success Icon Badge */}
             <div className="w-20 h-20 rounded-3xl bg-emerald-50 text-emerald-600 border border-emerald-200 mx-auto flex items-center justify-center shadow-soft">
