@@ -7,8 +7,6 @@ import {
   Clock,
   CheckCircle2,
   Phone,
-  Scissors,
-  Sparkles,
   ChevronRight,
   ChevronLeft,
   CalendarPlus,
@@ -552,12 +550,13 @@ export default function BookingPage() {
       setStep(5);
       triggerHaptic(50);
 
-      // Launch celebratory confetti
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ["#6366f1", "#10b981", "#f59e0b", "#ec4899"],
+      // Launch celebratory confetti (no web worker: the CSP blocks blob: workers)
+      confetti.create(undefined, { resize: true, useWorker: false })({
+        particleCount: 70,
+        spread: 60,
+        origin: { y: 0.55 },
+        colors: ["#1E4D36", "#CFEA6E", "#2F6B4B", "#F4F1E8"],
+        disableForReducedMotion: true,
       });
     } catch (err) {
       console.error("Booking error:", err);
@@ -571,8 +570,8 @@ export default function BookingPage() {
   if (isLoadingBusiness) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
-        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-slate-600 font-medium">טוען את לוח התורים...</p>
+        <div className="m-spin m-spin-dark mb-4" style={{ width: 36, height: 36, borderWidth: 3 }} />
+        <p className="text-ink-600 font-medium">טוען את היומן...</p>
       </div>
     );
   }
@@ -581,7 +580,7 @@ export default function BookingPage() {
   if (notFound || !business) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center max-w-md mx-auto">
-        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4">
+        <div className="w-16 h-16 bg-danger-50 text-danger-600 rounded-xl flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">עסק לא נמצא</h1>
@@ -596,9 +595,9 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 md:pb-12">
+    <div className="min-h-screen bg-paper text-ink-900 pb-24 md:pb-12">
       {/* Mobile App Bar / Header */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5 transition-all shadow-xs">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-ink-200 px-4 py-2.5">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             {business.settings?.logo_url ? (
@@ -606,11 +605,14 @@ export default function BookingPage() {
               <img
                 src={business.settings.logo_url}
                 alt={business.name}
-                className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-md shadow-slate-200/50 flex-shrink-0"
+                className="w-10 h-10 rounded-lg object-cover border border-ink-200 flex-shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20 flex-shrink-0">
-                <Scissors className="w-5 h-5" />
+              <div
+                aria-hidden="true"
+                className="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center text-lime text-lg font-extrabold flex-shrink-0"
+              >
+                {business.name.trim().charAt(0)}
               </div>
             )}
             <div className="text-right">
@@ -618,7 +620,7 @@ export default function BookingPage() {
                 {business.name}
               </h1>
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-block w-2 h-2 rounded-full bg-success-500" />
                 <span>פתוח להזמנת תורים</span>
               </div>
             </div>
@@ -631,19 +633,19 @@ export default function BookingPage() {
               )}?text=${encodeURIComponent(`שלום ${business.name}, אשמח לקבל מידע / לקבוע תור`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors"
+              className="m-key2 w-11 h-11 rounded-lg border border-ink-200 bg-white flex items-center justify-center text-success-700"
               title="שלח וואטסאפ לעסק"
               aria-label="שלח וואטסאפ לעסק"
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-5 h-5" />
             </a>
             <a
               href={`tel:${business.owner_phone}`}
-              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+              className="m-key2 w-11 h-11 rounded-lg border border-ink-200 bg-white flex items-center justify-center text-ink-700"
               title="חייג לעסק"
               aria-label="חייג לעסק"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-5 h-5" />
             </a>
           </div>
         </div>
@@ -654,18 +656,21 @@ export default function BookingPage() {
         {/* Progress Tracker (Steps 1, 2, 3) */}
         {step < 5 && (
           <div className="mb-6">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-              <span className={step === 1 ? "text-indigo-600" : ""}>1. בחירת שירות</span>
-              <span className={step === 2 ? "text-indigo-600" : ""}>2. תאריך</span>
-              <span className={step === 3 ? "text-indigo-600" : ""}>3. שעה</span>
-              <span className={step === 4 ? "text-indigo-600" : ""}>4. פרטים</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-600 transition-all duration-300 rounded-full"
-                style={{ width: `${(step / 4) * 100}%` }}
-              />
-            </div>
+            <ol className="grid grid-cols-4 gap-1.5 text-xs font-semibold text-ink-500" aria-label={`שלב ${step} מתוך 4`}>
+              {["שירות", "תאריך", "שעה", "פרטים"].map((label, i) => (
+                <li key={label} className="flex flex-col gap-1.5" aria-current={step === i + 1 ? "step" : undefined}>
+                  <span
+                    className={cn(
+                      "h-1 rounded-full transition-colors duration-300",
+                      step > i ? "bg-brand-600" : "bg-ink-200"
+                    )}
+                  />
+                  <span className={cn(step === i + 1 && "text-brand-600 font-bold", step > i + 1 && "text-ink-700")}>
+                    {i + 1}. {label}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 
@@ -696,30 +701,32 @@ export default function BookingPage() {
               {services.map((service) => {
                 const isSelected = selectedService?.id === service.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={service.id}
+                    aria-pressed={isSelected}
                     onClick={() => {
                       triggerHaptic(20);
                       setSelectedService(service);
                     }}
                     className={cn(
-                      "p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between",
+                      "m-press w-full p-4 rounded-xl border text-right flex items-center justify-between",
                       isSelected
-                        ? "border-indigo-600 bg-indigo-50/40 shadow-sm"
-                        : "border-slate-200/80 bg-white hover:border-slate-300"
+                        ? "border-brand-600 bg-brand-50/60 ring-1 ring-brand-600"
+                        : "border-ink-200 bg-white hover:border-ink-300"
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      <div
+                      <span
+                        aria-hidden="true"
                         className={cn(
-                          "w-5 h-5 rounded-full border flex items-center justify-center transition-colors",
-                          isSelected
-                            ? "border-indigo-600 bg-indigo-600 text-white"
-                            : "border-slate-300 bg-white"
+                          "w-5 h-5 rounded-full border flex items-center justify-center transition-colors flex-none",
+                          isSelected ? "m-chip border-brand-600 bg-brand-600" : "border-ink-300 bg-white"
                         )}
+                        data-on={isSelected}
                       >
-                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                      </div>
+                        {isSelected && <span className="w-2 h-2 rounded-full bg-lime" />}
+                      </span>
 
                       <div className="text-right">
                         <h3 className="font-bold text-base text-slate-900 leading-snug">
@@ -740,21 +747,21 @@ export default function BookingPage() {
                     </div>
 
                     <div className="text-left">
-                      <span className="text-lg font-extrabold text-indigo-600">
+                      <span className="text-lg font-extrabold text-ink-900">
                         ₪{service.price}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
 
             {/* Bottom Sticky Action */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200/80 z-20">
+            <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
               <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-                <div className="text-right">
-                  <span className="text-xs text-slate-400">שירות נבחר:</span>
-                  <p className="text-sm font-bold text-slate-900 truncate">
+                <div className="text-right min-w-0">
+                  <span className="text-xs text-ink-500">שירות נבחר</span>
+                  <p className="text-sm font-bold text-ink-900 truncate">
                     {selectedService?.name || "בחר שירות"}
                   </p>
                 </div>
@@ -764,9 +771,9 @@ export default function BookingPage() {
                     if (selectedService) setStep(2);
                   }}
                   disabled={!selectedService}
-                  className="px-8 shadow-lg shadow-indigo-600/25"
+                  className="px-5 whitespace-nowrap flex-none"
                 >
-                  <span>המשך לבחירת מועד</span>
+                  <span>המשך לבחירת יום</span>
                   <ChevronLeft className="w-4 h-4 mr-1" />
                 </Button>
               </div>
@@ -799,7 +806,7 @@ export default function BookingPage() {
             </div>
 
             {/* Full Month Interactive Calendar Card */}
-            <Card className="p-4 sm:p-5 border border-slate-200/90 shadow-sm bg-white rounded-3xl space-y-4">
+            <Card className="p-4 sm:p-5 space-y-4">
               {/* Month Navigation Header */}
               <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                 {/* Previous Month (in RTL, Right arrow goes backward) */}
@@ -808,10 +815,10 @@ export default function BookingPage() {
                   onClick={handlePrevMonth}
                   disabled={!canGoPrevMonth}
                   className={cn(
-                    "p-2 rounded-xl transition-all flex items-center justify-center border",
+                    "w-11 h-11 rounded-lg flex items-center justify-center border",
                     canGoPrevMonth
-                      ? "border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95"
-                      : "border-slate-100 text-slate-300 opacity-30 cursor-not-allowed"
+                      ? "m-key2 border-ink-200 bg-white text-ink-800"
+                      : "border-ink-100 text-ink-300 opacity-40 cursor-not-allowed"
                   )}
                   title="חודש קודם"
                   aria-label="חודש קודם"
@@ -841,7 +848,7 @@ export default function BookingPage() {
                 <button
                   type="button"
                   onClick={handleNextMonth}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:scale-95 transition-all flex items-center justify-center"
+                  className="m-key2 w-11 h-11 rounded-lg border border-ink-200 bg-white text-ink-800 flex items-center justify-center"
                   title="חודש הבא"
                   aria-label="חודש הבא"
                 >
@@ -865,7 +872,7 @@ export default function BookingPage() {
               <div className="grid grid-cols-7 gap-y-2 gap-x-1 sm:gap-x-1.5 text-center items-center">
                 {/* Empty cells before day 1 */}
                 {Array.from({ length: startDayOfWeek }).map((_, i) => (
-                  <div key={`empty-pad-${i}`} className="h-10 sm:h-11" />
+                  <div key={`empty-pad-${i}`} className="h-12" />
                 ))}
 
                 {/* Days in Month */}
@@ -890,12 +897,13 @@ export default function BookingPage() {
                         key={idx}
                         type="button"
                         onClick={() => handleSelectDate(day)}
+                        aria-pressed={isSelected}
                         className={cn(
-                          "relative w-9 h-11 sm:w-11 sm:h-12 mx-auto rounded-2xl flex flex-col items-center justify-center transition-all duration-150 group",
+                          "m-chip m-press relative w-10 h-12 sm:w-11 mx-auto rounded-md flex flex-col items-center justify-center group",
                           isSelected
-                            ? "bg-indigo-600 text-white font-extrabold shadow-md shadow-indigo-600/35 ring-2 ring-indigo-200 scale-105"
-                            : "bg-slate-100/90 text-slate-800 font-bold border border-slate-200/90 hover:bg-indigo-50 hover:border-indigo-400 hover:text-indigo-600 hover:scale-105 active:scale-95 shadow-2xs",
-                          !isSelected && isToday(day) && "ring-2 ring-indigo-400/60 ring-offset-1"
+                            ? "bg-brand-600 text-white font-extrabold"
+                            : "bg-white text-ink-900 font-bold border border-ink-200 hover:border-brand-400",
+                          !isSelected && isToday(day) && "ring-2 ring-lime-edge ring-offset-1 ring-offset-white"
                         )}
                         title={`תאריך ${formatHebrewDate(day)}${business?.settings?.show_hebrew_dates ? ` (${formatJewishDate(day)}${holiday ? ` - ${holiday}` : ""})` : ""} - לחץ לבחירת שעה`}
                       >
@@ -906,7 +914,7 @@ export default function BookingPage() {
                           <span
                             className={cn(
                               "text-[9px] sm:text-[10px] leading-tight font-bold truncate max-w-[38px] mt-0.5",
-                              isSelected ? "text-indigo-100" : holiday ? "text-amber-700 group-hover:text-indigo-600" : "text-slate-500 group-hover:text-indigo-600"
+                              isSelected ? "text-brand-100" : holiday ? "text-pending-700" : "text-ink-500"
                             )}
                           >
                             {getHebrewDayLetter(day)}
@@ -927,7 +935,7 @@ export default function BookingPage() {
                           <span
                             className={cn(
                               "w-1 h-1 rounded-full mt-0.5 transition-colors",
-                              isSelected ? "bg-white" : "bg-emerald-500 group-hover:bg-indigo-500"
+                              isSelected ? "bg-lime" : "bg-success-500"
                             )}
                           />
                         )}
@@ -942,7 +950,7 @@ export default function BookingPage() {
                       type="button"
                       disabled
                       aria-disabled="true"
-                      className="w-9 h-11 sm:w-11 sm:h-12 mx-auto rounded-2xl flex flex-col items-center justify-center text-xs sm:text-sm text-slate-300 bg-transparent cursor-not-allowed opacity-35 select-none pointer-events-none"
+                      className="w-10 h-12 sm:w-11 mx-auto rounded-md flex flex-col items-center justify-center text-xs sm:text-sm text-ink-400 bg-transparent cursor-not-allowed opacity-50 select-none pointer-events-none"
                       title={holiday ? `${formatHebrewDate(day)} - ${holiday}` : "אין תורים זמינים בתאריך זה"}
                     >
                       <span className="leading-none">{dayNum}</span>
@@ -959,13 +967,13 @@ export default function BookingPage() {
               {/* Legend */}
               <div className="flex items-center justify-center gap-3 sm:gap-4 pt-2.5 border-t border-slate-100 text-[11px] text-slate-500">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center">
-                    <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                  <span className="w-3.5 h-3.5 rounded bg-white border border-ink-300 flex items-center justify-center">
+                    <span className="w-1 h-1 rounded-full bg-success-500" />
                   </span>
                   <span>תורים זמינים</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full bg-indigo-600" />
+                  <span className="w-3.5 h-3.5 rounded bg-brand-600" />
                   <span className="font-semibold text-slate-700">יום נבחר</span>
                 </div>
                 {business?.settings?.show_hebrew_dates && (
@@ -977,8 +985,8 @@ export default function BookingPage() {
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <span className="w-3.5 h-3.5 rounded-full text-slate-300 text-[10px] flex items-center justify-center font-bold">
-                    —
+                  <span className="w-3.5 h-3.5 rounded text-ink-400 text-[10px] flex items-center justify-center font-bold">
+                    -
                   </span>
                   <span>סגור</span>
                 </div>
@@ -1020,10 +1028,10 @@ export default function BookingPage() {
                     disabled={!prevDay}
                     onClick={() => prevDay && handleSelectDate(prevDay, false)}
                     className={cn(
-                      "rounded-2xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold transition-all",
+                      "rounded-xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold",
                       prevDay
-                        ? "border-slate-300 bg-white text-slate-800 hover:bg-indigo-50 hover:border-indigo-400 active:scale-95"
-                        : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                        ? "m-key2 border-ink-200 bg-white text-ink-800"
+                        : "border-ink-100 bg-paper text-ink-300 cursor-not-allowed"
                     )}
                     aria-label="היום הקודם"
                   >
@@ -1031,8 +1039,8 @@ export default function BookingPage() {
                     <span className="text-xs">היום הקודם</span>
                   </button>
 
-                  <div className="rounded-2xl bg-indigo-600 text-white px-4 py-3 text-center min-w-[120px] flex flex-col justify-center shadow-md shadow-indigo-600/25">
-                    <span className="text-xs font-semibold text-indigo-100">
+                  <div key={format(selectedDate, "yyyy-MM-dd")} className="m-chip rounded-xl bg-brand-600 text-white px-4 py-3 text-center min-w-[120px] flex flex-col justify-center" data-on="true">
+                    <span className="text-xs font-semibold text-brand-100">
                       {format(selectedDate, "EEEE", { locale: he })}
                     </span>
                     <span className="text-lg font-extrabold leading-tight">
@@ -1045,10 +1053,10 @@ export default function BookingPage() {
                     disabled={!nextDay}
                     onClick={() => nextDay && handleSelectDate(nextDay, false)}
                     className={cn(
-                      "rounded-2xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold transition-all",
+                      "rounded-xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5 text-sm font-bold",
                       nextDay
-                        ? "border-slate-300 bg-white text-slate-800 hover:bg-indigo-50 hover:border-indigo-400 active:scale-95"
-                        : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+                        ? "m-key2 border-ink-200 bg-white text-ink-800"
+                        : "border-ink-100 bg-paper text-ink-300 cursor-not-allowed"
                     )}
                     aria-label="היום הבא"
                   >
@@ -1060,7 +1068,7 @@ export default function BookingPage() {
             })()}
 
             {/* Selected Date Header */}
-            <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 text-center text-sm font-semibold text-indigo-950 flex flex-col items-center justify-center gap-1.5 shadow-2xs">
+            <div className="bg-white border border-ink-200 rounded-xl px-4 py-3 text-center text-sm font-semibold text-ink-800 flex flex-col items-center justify-center gap-1.5">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-indigo-600" />
                 <span>שעות פנויות ל{formatHebrewDate(selectedDate)}:</span>
@@ -1072,7 +1080,6 @@ export default function BookingPage() {
                   </span>
                   {getJewishHolidayOrShabbat(selectedDate) && (
                     <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full text-xs font-extrabold shadow-2xs flex items-center gap-1">
-                      <span>✨</span>
                       <span>{getJewishHolidayOrShabbat(selectedDate)}</span>
                     </span>
                   )}
@@ -1083,11 +1090,11 @@ export default function BookingPage() {
             {/* Slots Section */}
             {isLoadingSlots ? (
               <div className="py-12 text-center">
-                <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <div className="m-spin m-spin-dark mx-auto mb-3" style={{ width: 28, height: 28 }} />
                 <p className="text-xs text-slate-500">בודק זמינות תורים...</p>
               </div>
             ) : slots.length === 0 ? (
-              <div className="py-12 px-4 rounded-3xl border border-dashed border-slate-300 text-center bg-white">
+              <div className="py-10 px-4 rounded-xl border border-dashed border-ink-300 text-center bg-white">
                 <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                 <h4 className="font-bold text-slate-800 mb-1">
                   {slotMessage || "אין שעות פנויות ביום זה"}
@@ -1146,7 +1153,7 @@ export default function BookingPage() {
                 {/* Morning Slots */}
                 {slots.some((s) => s.period === "morning") && (
                   <div>
-                    <span className="block text-xs font-bold text-slate-400 mb-2 text-right">
+                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
                       בוקר (עד 12:00)
                     </span>
                     <div className="grid grid-cols-4 gap-2">
@@ -1156,15 +1163,16 @@ export default function BookingPage() {
                           <button
                             key={i}
                             type="button"
+                            aria-pressed={selectedSlot?.startTime === slot.startTime}
                             onClick={() => {
                               triggerHaptic(15);
                               setSelectedSlot(slot);
                             }}
                             className={cn(
-                              "h-12 rounded-xl text-sm font-bold border transition-all flex items-center justify-center",
+                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
                               selectedSlot?.startTime === slot.startTime
-                                ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/30 scale-[1.02]"
-                                : "bg-white text-slate-800 border-slate-200 hover:border-indigo-300"
+                                ? "bg-brand-600 text-white border-brand-600"
+                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
                             )}
                           >
                             {slot.formattedTime}
@@ -1177,7 +1185,7 @@ export default function BookingPage() {
                 {/* Afternoon Slots */}
                 {slots.some((s) => s.period === "afternoon") && (
                   <div>
-                    <span className="block text-xs font-bold text-slate-400 mb-2 text-right">
+                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
                       צהריים (12:00 - 17:00)
                     </span>
                     <div className="grid grid-cols-4 gap-2">
@@ -1187,15 +1195,16 @@ export default function BookingPage() {
                           <button
                             key={i}
                             type="button"
+                            aria-pressed={selectedSlot?.startTime === slot.startTime}
                             onClick={() => {
                               triggerHaptic(15);
                               setSelectedSlot(slot);
                             }}
                             className={cn(
-                              "h-12 rounded-xl text-sm font-bold border transition-all flex items-center justify-center",
+                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
                               selectedSlot?.startTime === slot.startTime
-                                ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/30 scale-[1.02]"
-                                : "bg-white text-slate-800 border-slate-200 hover:border-indigo-300"
+                                ? "bg-brand-600 text-white border-brand-600"
+                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
                             )}
                           >
                             {slot.formattedTime}
@@ -1208,7 +1217,7 @@ export default function BookingPage() {
                 {/* Evening Slots */}
                 {slots.some((s) => s.period === "evening") && (
                   <div>
-                    <span className="block text-xs font-bold text-slate-400 mb-2 text-right">
+                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
                       ערב (מ-17:00)
                     </span>
                     <div className="grid grid-cols-4 gap-2">
@@ -1218,15 +1227,16 @@ export default function BookingPage() {
                           <button
                             key={i}
                             type="button"
+                            aria-pressed={selectedSlot?.startTime === slot.startTime}
                             onClick={() => {
                               triggerHaptic(15);
                               setSelectedSlot(slot);
                             }}
                             className={cn(
-                              "h-12 rounded-xl text-sm font-bold border transition-all flex items-center justify-center",
+                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
                               selectedSlot?.startTime === slot.startTime
-                                ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/30 scale-[1.02]"
-                                : "bg-white text-slate-800 border-slate-200 hover:border-indigo-300"
+                                ? "bg-brand-600 text-white border-brand-600"
+                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
                             )}
                           >
                             {slot.formattedTime}
@@ -1242,11 +1252,11 @@ export default function BookingPage() {
             <div className="h-12" />
 
             {/* Bottom Sticky Action */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200/80 z-20">
+            <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
               <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-                <div className="text-right">
-                  <span className="text-xs text-slate-400">שעה נבחרת:</span>
-                  <p className="text-sm font-bold text-slate-900">
+                <div className="text-right min-w-0">
+                  <span className="text-xs text-ink-500">שעה נבחרת</span>
+                  <p className="text-sm font-bold text-ink-900">
                     {selectedSlot ? selectedSlot.formattedTime : "אנא בחר שעה"}
                   </p>
                 </div>
@@ -1256,7 +1266,7 @@ export default function BookingPage() {
                     if (selectedSlot) setStep(4);
                   }}
                   disabled={!selectedSlot}
-                  className="px-8 shadow-lg shadow-indigo-600/25"
+                  className="px-5 whitespace-nowrap flex-none"
                 >
                   <span>המשך לפרטים</span>
                   <ChevronLeft className="w-4 h-4 mr-1" />
@@ -1293,10 +1303,10 @@ export default function BookingPage() {
             </div>
 
             {/* Client Fast Auth Choice: Google vs Guest (Strictly NO Passwords for Clients) */}
-            <div className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-white border border-ink-200 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-700">בחר אופן הזמנה:</span>
-                <span className="text-[11px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] font-bold text-success-700 bg-success-100 px-2 py-0.5 rounded">
                   ללא סיסמה • מהיר ומאובטח
                 </span>
               </div>
@@ -1342,15 +1352,15 @@ export default function BookingPage() {
 
             {/* Returning Client Banner */}
             {isReturningClient && (
-              <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-3 text-right">
-                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-4 h-4" />
+              <div className="m-toast p-3.5 rounded-xl bg-lime-soft border border-lime-edge flex items-center gap-3 text-right">
+                <div className="w-8 h-8 rounded-lg bg-brand-600 text-lime flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-indigo-950">
-                    שמחים לראותך שוב, {firstName}! ✨
+                  <h4 className="text-sm font-bold text-ink-900">
+                    שמחים לראות אותך שוב, {firstName}
                   </h4>
-                  <p className="text-xs text-indigo-700">
+                  <p className="text-xs text-ink-700">
                     זיהינו אותך במערכת והפרטים שלך מולאו אוטומטית.
                   </p>
                 </div>
@@ -1431,7 +1441,7 @@ export default function BookingPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="בקשות מיוחדות, דגשים..."
-                  className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/15 outline-none transition-all"
+                  className="w-full rounded-lg border border-ink-200 bg-white p-3 text-base focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none transition-colors"
                 />
               </div>
 
@@ -1441,7 +1451,7 @@ export default function BookingPage() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-5 h-5 rounded-lg text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  className="w-5 h-5 rounded accent-brand-600 border-ink-300"
                 />
                 <span className="text-xs font-medium text-slate-600">
                   שמור את הפרטים שלי לפעם הבאה
@@ -1449,7 +1459,7 @@ export default function BookingPage() {
               </label>
 
               {/* Booking Summary Box */}
-              <Card className="bg-slate-50 border-slate-200/80 p-4 space-y-2 text-right">
+              <Card className="m-ticket bg-white p-4 space-y-2 text-right [--notch:#F4F1E8]">
                 <span className="text-xs font-bold text-slate-400 block">
                   סיכום ההזמנה:
                 </span>
@@ -1486,16 +1496,16 @@ export default function BookingPage() {
               </Card>
 
               {/* Bottom Sticky Action */}
-              <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-200/80 z-20">
+              <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
                 <div className="max-w-md mx-auto">
                   <Button
                     type="submit"
                     size="lg"
                     isLoading={isSubmitting}
-                    className="w-full shadow-lg shadow-indigo-600/25"
+                    className="w-full"
                   >
-                    <CheckCircle2 className="w-5 h-5 ml-2" />
-                    <span>אישור וקביעת התור</span>
+                    {!isSubmitting && <CheckCircle2 className="w-5 h-5" />}
+                    <span>{isSubmitting ? "שומרים לך את התור" : "אישור וקביעת התור"}</span>
                   </Button>
                 </div>
               </div>
@@ -1509,21 +1519,23 @@ export default function BookingPage() {
         {step === 5 && confirmedAppointment && (
           <div className="space-y-6 text-center animate-in zoom-in-95 duration-300 py-4">
             {/* Success Icon Badge */}
-            <div className="w-20 h-20 rounded-3xl bg-emerald-50 text-emerald-600 border border-emerald-200 mx-auto flex items-center justify-center shadow-soft">
-              <CheckCircle2 className="w-10 h-10" />
+            <div className="w-16 h-16 rounded-xl bg-lime text-lime-ink mx-auto flex items-center justify-center m-chip" data-on="true">
+              <svg className="m-draw w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
             </div>
 
             <div>
-              <h2 className="text-2xl font-extrabold text-slate-900">התור נקבע בהצלחה!</h2>
+              <h2 className="text-2xl font-extrabold text-ink-900">התור נקבע</h2>
               <p className="text-sm text-slate-500 mt-1">
                 נשלח אליך אישור ותזכורת לפני מועד התור
               </p>
             </div>
 
             {/* Appointment Ticket Card */}
-            <Card className="border-2 border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white text-right p-5 space-y-3.5 shadow-elevated">
-              <div className="border-b border-indigo-100 pb-3">
-                <span className="text-xs text-indigo-600 font-semibold block">
+            <Card className="m-print m-ticket text-right p-5 space-y-3.5 [--notch:#F4F1E8]">
+              <div className="border-b border-dashed border-ink-300 pb-3">
+                <span className="text-xs text-ink-600 font-semibold block">
                   {business.name}
                 </span>
                 <h3 className="text-lg font-bold text-slate-900">
@@ -1540,7 +1552,7 @@ export default function BookingPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">שעה:</span>
-                  <span className="font-bold text-indigo-600 text-base">
+                  <span className="font-extrabold text-ink-900 text-lg bg-lime px-2 rounded">
                     {format(new Date(confirmedAppointment.start_time), "HH:mm")}
                   </span>
                 </div>
@@ -1562,12 +1574,12 @@ export default function BookingPage() {
 
             {/* Custom Post-Booking Instructions / Arrival Guidelines from Owner */}
             {business?.settings?.post_booking_message && (
-              <Card className="p-4 bg-gradient-to-r from-amber-50/90 to-orange-50/80 border border-amber-200/90 rounded-3xl text-right space-y-1.5 shadow-2xs">
-                <div className="flex items-center gap-2 text-amber-950 font-bold text-xs">
-                  <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                  <span>הנחיות ודגשים חשובים מבית העסק:</span>
+              <Card className="p-4 bg-pending-50 border-pending-200 text-right space-y-1.5">
+                <div className="flex items-center gap-2 text-pending-800 font-bold text-sm">
+                  <AlertCircle className="w-4 h-4 text-pending-600 flex-shrink-0" />
+                  <span>כדאי לדעת לפני שמגיעים</span>
                 </div>
-                <p className="text-xs text-amber-900 leading-relaxed whitespace-pre-line font-medium pr-1">
+                <p className="text-sm text-ink-800 leading-relaxed whitespace-pre-line pr-1">
                   {business.settings.post_booking_message}
                 </p>
               </Card>
@@ -1575,15 +1587,14 @@ export default function BookingPage() {
 
             {/* Instant Digital Payment Options (Bit & PayBox) */}
             {(business?.settings?.bit_payment_url || business?.settings?.paybox_payment_url) && (
-              <Card className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/80 to-purple-50/80 border border-indigo-200/80 rounded-3xl shadow-sm text-right space-y-2.5">
+              <Card className="p-4 text-right space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-base">💳</span>
-                    <span className="text-xs font-extrabold text-slate-900">
+                    <span className="text-sm font-extrabold text-ink-900">
                       תשלום מהיר בנייד (Bit / PayBox)
                     </span>
                   </div>
-                  <span className="text-[11px] font-bold text-indigo-700 bg-white/90 border border-indigo-200 px-2 py-0.5 rounded-full shadow-2xs">
+                  <span className="text-xs font-bold text-ink-900 bg-ink-100 px-2 py-0.5 rounded">
                     ₪{confirmedAppointment.service?.price || selectedService?.price}
                   </span>
                 </div>
@@ -1596,10 +1607,9 @@ export default function BookingPage() {
                       href={business.settings.bit_payment_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 h-11 rounded-2xl bg-[#002d72] hover:bg-[#002256] text-white font-bold text-xs shadow-sm active:scale-95 transition-all"
+                      className="m-key flex items-center justify-center gap-2 h-12 rounded-lg bg-[#002d72] text-white font-bold text-sm"
                     >
-                      <span className="text-sm">🔹</span>
-                      <span>שלם עכשיו ב-Bit</span>
+                      <span>תשלום ב-Bit</span>
                       <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                     </a>
                   )}
@@ -1608,10 +1618,9 @@ export default function BookingPage() {
                       href={business.settings.paybox_payment_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 h-11 rounded-2xl bg-[#008de4] hover:bg-[#0079c4] text-white font-bold text-xs shadow-sm active:scale-95 transition-all"
+                      className="m-key flex items-center justify-center gap-2 h-12 rounded-lg bg-[#008de4] text-white font-bold text-sm"
                     >
-                      <span className="text-sm">📦</span>
-                      <span>שלם עכשיו ב-PayBox</span>
+                      <span>תשלום ב-PayBox</span>
                       <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                     </a>
                   )}
@@ -1631,9 +1640,9 @@ export default function BookingPage() {
                 })}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-white border-2 border-indigo-600 text-indigo-700 font-bold hover:bg-indigo-50 active:bg-indigo-100 transition-colors shadow-sm"
+                className="m-key w-full flex items-center justify-center gap-2 h-[52px] rounded-lg bg-brand-600 text-white font-bold"
               >
-                <CalendarPlus className="w-5 h-5 text-indigo-600" />
+                <CalendarPlus className="w-5 h-5 text-lime" />
                 <span>הוסף ליומן Google</span>
               </a>
 
@@ -1646,10 +1655,10 @@ export default function BookingPage() {
                   location: business.name,
                 })}
                 download="appointment.ics"
-                className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-slate-100 text-slate-700 font-medium hover:bg-slate-200 transition-colors text-sm"
+                className="m-key2 w-full flex items-center justify-center gap-2 h-12 rounded-lg border border-ink-200 bg-white text-ink-900 font-semibold text-sm"
               >
-                <CalendarIcon className="w-4 h-4 text-slate-500" />
-                <span>הורד קובץ יומן (Apple / Outlook)</span>
+                <CalendarIcon className="w-4 h-4 text-ink-600" />
+                <span>הוספה ליומן של אייפון או Outlook</span>
               </a>
 
               {/* Direct WhatsApp Chat with Business Owner */}
@@ -1667,10 +1676,10 @@ export default function BookingPage() {
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all"
+                  className="m-key2 w-full flex items-center justify-center gap-2 h-12 rounded-lg border border-ink-200 bg-white text-success-700 font-semibold text-sm"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>יש לך שאלה? פתח וואטסאפ מול בית העסק</span>
+                  <span>שאלה על התור? וואטסאפ לעסק</span>
                 </a>
               )}
             </div>
@@ -1682,7 +1691,7 @@ export default function BookingPage() {
               </span>
               <a
                 href={`/cancel/${confirmedAppointment.id}`}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 underline"
+                className="inline-flex items-center gap-1.5 min-h-[44px] text-sm font-bold text-danger-600 underline"
               >
                 <span>קישור ישיר לביטול התור</span>
                 <ExternalLink className="w-3.5 h-3.5" />
