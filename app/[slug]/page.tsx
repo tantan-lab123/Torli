@@ -62,6 +62,15 @@ const DAY_PARTS: { id: TimeSlot["period"]; label: string; hours: string }[] = [
   { id: "evening", label: "ערב", hours: "מ-17:00" },
 ];
 
+// Back / next keys live at the bottom of every step, where the thumb is.
+function StickyFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
+      <div className="max-w-md mx-auto flex items-center gap-3">{children}</div>
+    </div>
+  );
+}
+
 export default function BookingPage() {
   const params = useParams();
   const router = useRouter();
@@ -765,28 +774,25 @@ export default function BookingPage() {
               })}
             </div>
 
-            {/* Bottom Sticky Action */}
-            <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
-              <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-                <div className="text-right min-w-0">
-                  <span className="text-xs text-ink-500">שירות נבחר</span>
-                  <p className="text-sm font-bold text-ink-900 truncate">
-                    {selectedService?.name || "בחר שירות"}
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => {
-                    if (selectedService) setStep(2);
-                  }}
-                  disabled={!selectedService}
-                  className="px-5 whitespace-nowrap flex-none"
-                >
-                  <span>המשך לבחירת יום</span>
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                </Button>
+            <StickyFooter>
+              <div className="flex-1 text-right min-w-0">
+                <span className="text-xs text-ink-500">שירות נבחר</span>
+                <p className="text-sm font-bold text-ink-900 truncate">
+                  {selectedService?.name || "בחר שירות"}
+                </p>
               </div>
-            </div>
+              <Button
+                size="lg"
+                onClick={() => {
+                  if (selectedService) setStep(2);
+                }}
+                disabled={!selectedService}
+                className="px-5 whitespace-nowrap flex-none"
+              >
+                <span>המשך לבחירת יום</span>
+                <ChevronLeft className="w-4 h-4 mr-1" />
+              </Button>
+            </StickyFooter>
           </div>
         )}
 
@@ -795,15 +801,7 @@ export default function BookingPage() {
         {/* ========================================================================= */}
         {step === 2 && (
           <div className="space-y-5 pb-36 animate-in fade-in duration-200">
-            {/* Header with Back Button */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(1)}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-                <span>חזרה לבחירת שירות</span>
-              </button>
+            <div className="flex">
               <Badge variant="default">{selectedService?.name}</Badge>
             </div>
 
@@ -1002,6 +1000,12 @@ export default function BookingPage() {
               </div>
             </Card>
 
+            <StickyFooter>
+              <Button variant="outline" size="lg" className="w-full" onClick={() => setStep(1)}>
+                <ChevronRight className="w-4 h-4" />
+                <span>חזרה לבחירת שירות</span>
+              </Button>
+            </StickyFooter>
           </div>
         )}
 
@@ -1009,15 +1013,8 @@ export default function BookingPage() {
         {/* STEP 3: PICK A TIME (own page, with previous / next day arrows) */}
         {/* ========================================================================= */}
         {step === 3 && (
-          <div className="space-y-5 pb-10 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(2)}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-                <span>חזרה ללוח השנה</span>
-              </button>
+          <div className="space-y-5 pb-32 animate-in fade-in duration-200">
+            <div className="flex">
               <Badge variant="default">{selectedService?.name}</Badge>
             </div>
 
@@ -1257,6 +1254,13 @@ export default function BookingPage() {
                 );
               })()
             )}
+
+            <StickyFooter>
+              <Button variant="outline" size="lg" className="w-full" onClick={() => setStep(2)}>
+                <ChevronRight className="w-4 h-4" />
+                <span>חזרה ללוח השנה</span>
+              </Button>
+            </StickyFooter>
           </div>
         )}
 
@@ -1265,15 +1269,7 @@ export default function BookingPage() {
         {/* ========================================================================= */}
         {step === 4 && (
           <div className="space-y-5 pb-32 animate-in fade-in duration-200">
-            {/* Header with Back Button */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setStep(3)}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-                <span>חזרה לבחירת שעה</span>
-              </button>
+            <div className="flex">
               <Badge variant="success">
                 {selectedSlot?.formattedTime} | {formatShortDate(selectedDate)}
               </Badge>
@@ -1360,7 +1356,7 @@ export default function BookingPage() {
                   maxLength={12}
                   placeholder="050-1234567"
                   dir="ltr"
-                  className="text-right font-semibold text-lg tracking-wider"
+                  className="text-right font-semibold text-lg"
                   value={phone}
                   onChange={handlePhoneChange}
                   error={formErrors.phone}
@@ -1479,20 +1475,29 @@ export default function BookingPage() {
                 </div>
               </Card>
 
-              {/* Bottom Sticky Action */}
-              <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
-                <div className="max-w-md mx-auto">
-                  <Button
-                    type="submit"
-                    size="lg"
-                    isLoading={isSubmitting}
-                    className="w-full"
-                  >
-                    {!isSubmitting && <CheckCircle2 className="w-5 h-5" />}
-                    <span>{isSubmitting ? "שומרים לך את התור" : "אישור וקביעת התור"}</span>
-                  </Button>
-                </div>
-              </div>
+              <StickyFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setStep(3)}
+                  disabled={isSubmitting}
+                  aria-label="חזרה לבחירת שעה"
+                  className="flex-none px-4"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                  <span>חזרה</span>
+                </Button>
+                <Button
+                  type="submit"
+                  size="lg"
+                  isLoading={isSubmitting}
+                  className="flex-1 min-w-0"
+                >
+                  {!isSubmitting && <CheckCircle2 className="w-5 h-5" />}
+                  <span>{isSubmitting ? "שומרים לך את התור" : "אישור וקביעת התור"}</span>
+                </Button>
+              </StickyFooter>
             </form>
           </div>
         )}
