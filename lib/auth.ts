@@ -11,8 +11,13 @@ const g = globalThis as unknown as { __TORLI_DEV_SECRET__?: string };
 function getSecret(): string {
   const s = process.env.SESSION_SECRET;
   if (s && s.length >= 32) return s;
+  // No dedicated secret: derive one from the server-only service-role key (never exposed to the browser).
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (svc && svc.length >= 32) {
+    return crypto.createHash("sha256").update("torli-session-v1:" + svc).digest("hex");
+  }
   if (process.env.NODE_ENV === "production") {
-    throw new Error("SESSION_SECRET (>=32 chars) must be set in production");
+    throw new Error("SESSION_SECRET (>=32 chars) or SUPABASE_SERVICE_ROLE_KEY must be set in production");
   }
   // dev only: shared across route bundles so sessions survive hot reloads
   g.__TORLI_DEV_SECRET__ = g.__TORLI_DEV_SECRET__ || crypto.randomBytes(32).toString("hex");
