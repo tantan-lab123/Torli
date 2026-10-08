@@ -226,6 +226,161 @@ a {
 @keyframes m-enter-down { from { opacity: 0; transform: translateY(-12px); } }
 @keyframes m-enter-zoom { from { opacity: 0; transform: scale(0.95); } }
 
+/* ==========================================================================
+   Landing page (app/page.tsx, components/landing): hairline frames, a ruled
+   "diary page" background, and motion that shows what the product does.
+   ========================================================================== */
+html:has(.l-page) { scroll-behavior: smooth; }
+
+/* Reveal on scroll. RevealObserver marks [data-reveal] blocks that start below the
+   fold as data-rv="wait" and flips them to "in" when they scroll into view, so nothing
+   is hidden without JavaScript and nothing keeps a transform once it is in. */
+[data-rv] {
+  transition: opacity 0.7s var(--m-out), transform 0.8s var(--m-out);
+  transition-delay: var(--rv-delay, 0s);
+}
+[data-rv="wait"] { opacity: 0; transform: translateY(22px); }
+[data-reveal="line"] { transform-origin: right; }
+[data-reveal="line"][data-rv] { transition-duration: 1.2s; }
+[data-rv="wait"][data-reveal="line"] { opacity: 1; transform: scaleX(0); }
+[data-reveal="rise"][data-rv] { transition: transform 1s var(--m-out) var(--rv-delay, 0s); }
+[data-rv="wait"][data-reveal="rise"] { opacity: 1; transform: translateY(30%); }
+
+/* Hero entrance on first paint */
+.l-in { animation: l-in 0.8s var(--m-out) backwards; animation-delay: var(--d, 0s); }
+@keyframes l-in { from { opacity: 0; transform: translateY(16px); } }
+.l-fade { animation: m-enter 0.4s var(--m-out) backwards; }
+
+/* A lime marker that draws itself behind a word */
+.l-mark { position: relative; z-index: 0; white-space: nowrap; }
+.l-mark::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0.52em -0.06em 0.02em;
+  background: #CFEA6E;
+  transform-origin: right;
+  animation: l-mark 0.8s 0.55s var(--m-out) backwards;
+}
+@keyframes l-mark { from { transform: scaleX(0); } }
+
+/* Ruled diary page */
+.l-ruled {
+  background-image: linear-gradient(to bottom, rgba(23, 32, 26, 0.09) 1px, transparent 1px);
+  background-size: 100% 56px;
+}
+.l-fade-y {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 9%, #000 86%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 9%, #000 86%, transparent);
+}
+
+/* Section frames: once the frame has room beside it (xl), a small cross marks where a
+   section rule meets the vertical frame lines. */
+@media (min-width: 1280px) {
+  .l-frame { position: relative; }
+  .l-frame::before,
+  .l-frame::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--l-cross, #A3A89F), var(--l-cross, #A3A89F)) center / 1px 100% no-repeat,
+      linear-gradient(var(--l-cross, #A3A89F), var(--l-cross, #A3A89F)) center / 100% 1px no-repeat;
+  }
+  .l-frame::before { right: -5px; }
+  .l-frame::after { left: -5px; }
+}
+
+/* Progress fills. The end of a fill is what moves an autoplay to its next step, so
+   pausing the animation pauses the whole sequence. */
+.l-fill { transform-origin: right; animation: l-fill linear both; }
+@keyframes l-fill { from { transform: scaleX(0); } }
+
+/* A finger tap on the demo screens */
+.l-tap {
+  position: absolute;
+  width: 15%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: rgba(23, 32, 26, 0.26);
+  border: 2px solid rgba(255, 253, 249, 0.95);
+  box-shadow: 0 0 0 1px rgba(23, 32, 26, 0.18);
+  pointer-events: none;
+  animation: l-tap 0.75s var(--m-out) both;
+}
+@keyframes l-tap {
+  0% { opacity: 0; transform: scale(1.7); }
+  35% { opacity: 1; transform: scale(1); }
+  60% { opacity: 1; transform: scale(0.82); }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+
+/* Screens inside the demo phones slide like a native push (new screens come from the left in RTL) */
+.l-screen { transition: opacity 0.45s var(--m-out), transform 0.6s var(--m-out); }
+
+/* Push notification banner on the owner's phone */
+.l-banner {
+  opacity: 0;
+  transform: translateY(-130%);
+  transition: transform 0.3s var(--m-out), opacity 0.2s ease-out;
+}
+.l-banner[data-on="true"] {
+  opacity: 1;
+  transform: none;
+  transition: transform 0.6s var(--m-spring) 0.8s, opacity 0.25s ease-out 0.8s;
+}
+
+/* The new booking travels from the client's phone to yours */
+.l-travel { animation: l-travel 0.8s var(--m-out) both; }
+@keyframes l-travel {
+  0% { transform: translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateX(-100%); opacity: 0; }
+}
+
+/* Business types marquee (moves toward the reading end in RTL) */
+.l-marquee { animation: l-marquee 46s linear infinite; }
+.l-marquee-wrap:hover .l-marquee { animation-play-state: paused; }
+@keyframes l-marquee { to { transform: translateX(50%); } }
+
+/* Chaos to order: each message straightens into a booking */
+.l-morph { transition: transform 0.85s var(--m-spring); }
+.l-face { transition: opacity 0.4s var(--m-out); }
+
+/* FAQ (native details/summary) */
+.l-faq > summary { list-style: none; }
+.l-faq > summary::-webkit-details-marker { display: none; }
+.l-faq-icon { transition: transform 0.3s var(--m-spring); }
+.l-faq[open] .l-faq-icon { transform: rotate(45deg); }
+.l-faq[open] .l-faq-body { animation: l-in 0.45s var(--m-out) backwards; }
+
+/* Feature cells: a lime rule grows along the top on hover */
+.l-cell::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: #CFEA6E;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.45s var(--m-out);
+}
+@media (hover: hover) {
+  .l-cell:hover::before { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.l-page) { scroll-behavior: auto; }
+  .l-marquee { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
