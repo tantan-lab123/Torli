@@ -9,6 +9,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@hookform/resolvers": "^5.9.1",
     "@supabase/supabase-js": "^2.109.0",
     "@types/canvas-confetti": "^1.9.0",

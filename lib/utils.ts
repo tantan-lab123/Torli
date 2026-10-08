@@ -2,6 +2,12 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
+import { TZDate } from "@date-fns/tz";
+
+// Instants (ISO strings) are always displayed on the Israel wall clock, on server and client alike.
+const IL_TZ = "Asia/Jerusalem";
+const asIsrael = (date: Date | string): Date =>
+  typeof date === "string" ? new TZDate(parseISO(date), IL_TZ) : date;
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -91,7 +97,7 @@ export function validatePhoneNumber(phone: string): {
  * Format date in friendly Hebrew string (e.g., "יום חמישי, 10 בספטמבר")
  */
 export function formatHebrewDate(date: Date | string): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
+  const d = asIsrael(date);
   return format(d, "EEEE, d בMMMM", { locale: he });
 }
 
@@ -99,7 +105,7 @@ export function formatHebrewDate(date: Date | string): string {
  * Format short date (e.g., "10/09")
  */
 export function formatShortDate(date: Date | string): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
+  const d = asIsrael(date);
   return format(d, "dd/MM");
 }
 
@@ -107,7 +113,7 @@ export function formatShortDate(date: Date | string): string {
  * Format time (e.g., "14:30")
  */
 export function formatTime(date: Date | string): string {
-  const d = typeof date === "string" ? parseISO(date) : date;
+  const d = asIsrael(date);
   return format(d, "HH:mm");
 }
 

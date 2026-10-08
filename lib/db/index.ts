@@ -517,6 +517,17 @@ export async function findOrCreateClient(
   const existing = await findClientByPhone(businessId, normalizedPhone);
   if (existing) {
     // Never let an anonymous booking overwrite stored client details; only fill a missing email.
+    // A verified Google identity may be linked to the existing record once.
+    if (clientData.google_id && !existing.google_id) {
+      if (isSupabaseConfigured && supabaseAdmin) {
+        const { error } = await supabaseAdmin
+          .from("clients")
+          .update({ google_id: clientData.google_id, auth_provider: "google" })
+          .eq("id", existing.id);
+        if (error) throw error;
+      }
+      existing.google_id = clientData.google_id;
+    }
     if (clientData.email && !existing.email) {
       if (isSupabaseConfigured && supabaseAdmin) {
         const { error } = await supabaseAdmin
@@ -781,4 +792,120 @@ export async function markReminderSent(appointmentId: string): Promise<boolean> 
     return true;
   }
   return false;
+}
+
+// ==============================================================================
+// CLIENT CONTACTS (owner address book) & CUSTOMER GOOGLE PROFILES
+// ==============================================================================
+
+export async function getClientById(id: string): Promise<Client | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from("clients").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as Client) || null;
+  }
+  return db.clients.find((c) => c.id === id) || null;
+}
+
+export async function updateClientNotes(id: string, notes: string): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("clients").update({ notes }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const c = db.clients.find((x) => x.id === id);
+  if (c) c.notes = notes;
+}
+
+export interface ContactInput {
+  first_name: string;
+  last_name: string;
+  phone: string; // already normalised to 10 digits
+  email?: string;
+  birthday?: string;
+  notes?: string;
+}
+
+/** Adds contacts to a business's customers; phones that already exist are skipped. */
+export async function addClientsBulk(
+  businessId: string,
+  contacts: ContactInput[]
+): Promise<{ added: number; skipped: number }> {
+  const existing = await getClients(businessId);
+  const known = new Set(existing.map((c) => c.phone.replace(/[^0-9]/g, "")));
+  const fresh: ContactInput[] = [];
+  for (const c of contacts) {
+    if (known.has(c.phone)) continue;
+    known.add(c.phone);
+    fresh.push(c);
+  }
+
+  if (isSupabaseConfigured && supabaseAdmin) {
+    for (let i = 0; i < fresh.length; i += 200) {
+      const rows = fresh.slice(i, i + 200).map((c) => ({
+        business_id: businessId,
+        phone: c.phone,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        email: c.email || null,
+        birthday: c.birthday || null,
+        notes: c.notes || null,
+        auth_provider: "guest",
+      }));
+      const { error } = await supabaseAdmin
+        .from("clients")
+        .upsert(rows, { onConflict: "business_id,phone", ignoreDuplicates: true });
+      if (error) throw error;
+    }
+  } else {
+    for (const c of fresh) {
+      db.clients.push({
+        id: "c-" + Math.random().toString(36).substring(2, 9),
+        business_id: businessId,
+        phone: c.phone,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        email: c.email,
+        birthday: c.birthday,
+        notes: c.notes,
+        auth_provider: "guest",
+        created_at: new Date().toISOString(),
+      } as Client);
+    }
+  }
+  return { added: fresh.length, skipped: contacts.length - fresh.length };
+}
+
+export interface CustomerProfile {
+  google_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+}
+
+const mockProfiles = new Map<string, CustomerProfile>();
+
+export async function getCustomerProfile(googleId: string): Promise<CustomerProfile | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("customer_profiles")
+      .select("google_id,email,first_name,last_name,phone")
+      .eq("google_id", googleId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as CustomerProfile) || null;
+  }
+  return mockProfiles.get(googleId) || null;
+}
+
+export async function upsertCustomerProfile(p: CustomerProfile): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin
+      .from("customer_profiles")
+      .upsert({ ...p, updated_at: new Date().toISOString() }, { onConflict: "google_id" });
+    if (error) throw error;
+    return;
+  }
+  mockProfiles.set(p.google_id, p);
 }

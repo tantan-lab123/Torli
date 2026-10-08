@@ -170,6 +170,7 @@ export default function AdminDashboardPage() {
   const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS.default);
   const [marketingMessages, setMarketingMessages] = useState<MarketingMessage[]>(DEFAULT_MARKETING_MESSAGES);
   const [customClients, setCustomClients] = useState<Client[]>([]);
+  const [savedClients, setSavedClients] = useState<Client[]>([]);
 
   // Onboarding / Setup Wizard state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -178,6 +179,7 @@ export default function AdminDashboardPage() {
   // Unique CRM Clients computed from appointments + custom created clients
   const clients = useMemo(() => {
     const map = new Map<string, Client>();
+    savedClients.forEach((c) => map.set(c.id, c));
     appointments.forEach((app) => {
       if (app.client) {
         map.set(app.client.id, app.client);
@@ -195,7 +197,21 @@ export default function AdminDashboardPage() {
     });
     customClients.forEach((c) => map.set(c.id, c));
     return Array.from(map.values());
-  }, [appointments, customClients, selectedBusiness]);
+  }, [appointments, customClients, savedClients, selectedBusiness]);
+
+  const loadSavedClients = useCallback(async () => {
+    try {
+      const res = await fetch("/api/clients");
+      if (res.ok) setSavedClients(await res.json());
+    } catch (err) {
+      console.error("Failed to load customers:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedBusiness) loadSavedClients();
+    else setSavedClients([]);
+  }, [selectedBusiness?.id, loadSavedClients]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
 
@@ -2273,10 +2289,36 @@ export default function AdminDashboardPage() {
               appointments={appointments}
               services={services}
               businessId={selectedBusiness.id}
-              onAddClient={(newClient) => {
-                setCustomClients((prev) => [newClient as Client, ...prev]);
+              onAddClient={async (newClient) => {
+                // persisted server-side so the customer survives a refresh
+                try {
+                  await fetch("/api/clients", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contacts: [newClient] }),
+                  });
+                  await loadSavedClients();
+                } catch {
+                  setCustomClients((prev) => [newClient as Client, ...prev]);
+                }
+              }}
+              onImportContacts={async (contacts) => {
+                const res = await fetch("/api/clients", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ contacts }),
+                });
+                if (!res.ok) throw new Error("import failed");
+                const result = await res.json();
+                await loadSavedClients();
+                return result;
               }}
               onUpdateClientNotes={(clientId, notes) => {
+                fetch("/api/clients", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: clientId, notes }),
+                }).catch(() => {});
                 setCustomClients((prev) => {
                   const exists = prev.find((c) => c.id === clientId);
                   if (exists) {

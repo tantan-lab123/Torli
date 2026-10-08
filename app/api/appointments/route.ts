@@ -7,6 +7,7 @@ import {
   findOrCreateClient,
   createAppointment,
   blockTimeSlot,
+  upsertCustomerProfile,
 } from "@/lib/db";
 import {
   addMinutes,
@@ -18,7 +19,8 @@ import {
   isSameWeek,
   isSameMonth,
 } from "date-fns";
-import { forbidden, getSessionBusinessId, unauthorized } from "@/lib/auth";
+import { forbidden, getSessionBusinessId, unauthorized, verifyGoogleAccessToken } from "@/lib/auth";
+import { generateAvailableSlots, israelDateString } from "@/lib/booking/slotGenerator";
 import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,8 @@ const bookingSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").max(254).optional().or(z.literal("")),
   start_time: z.string().datetime("זמן לא תקין"),
   notes: z.string().max(500, "ההערה ארוכה מדי").optional(),
+  // Supabase access token of a customer who signed in with Google (identity is verified server-side)
+  access_token: z.string().max(4000).optional(),
 });
 
 const blockSlotSchema = z.object({
@@ -104,8 +108,19 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const { business_id, service_id, phone, first_name, last_name, email, start_time, notes } =
+    const { business_id, service_id, phone, first_name, last_name, start_time, notes, access_token } =
       parsed.data;
+    let email = parsed.data.email;
+
+    // Verified Google identity (never trusted from the request body)
+    let google: { email: string; id: string } | null = null;
+    if (access_token) {
+      google = await verifyGoogleAccessToken(access_token);
+      if (!google) {
+        return NextResponse.json({ error: "ההתחברות עם Google פגה. אנא התחבר שוב." }, { status: 401 });
+      }
+      email = google.email;
+    }
     if (!rateLimit(`book:phone:${phone}`, 5, 60 * 60 * 1000)) return tooMany();
 
     const business = await getBusinessById(business_id);
@@ -135,6 +150,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "לא ניתן לקבוע תור רחוק כל כך קדימה" }, { status: 400 });
     }
 
+    // The requested start must be one of the slots the business actually offers
+    // (working hours, lunch break, closures, past times) in Israel time.
+    const offered = generateAvailableSlots({
+      business,
+      service,
+      selectedDate: parseISO(israelDateString(slotStart)),
+      existingAppointments: await getAppointments(business_id),
+      stepMinutes: business.slot_interval_minutes || 15,
+    });
+    if (!offered.slots.some((sl) => new Date(sl.startTime).getTime() === slotStart.getTime())) {
+      return NextResponse.json(
+        { error: "השעה שנבחרה אינה זמינה. אנא בחר מועד אחר." },
+        { status: 409 }
+      );
+    }
+
     // Double-booking check (the DB exclusion constraint is the hard guarantee)
     const existing = await getAppointments(business_id);
     const collision = existing.some((app) => {
@@ -156,7 +187,8 @@ export async function POST(request: NextRequest) {
       first_name,
       last_name,
       email: email || undefined,
-      auth_provider: "guest",
+      google_id: google?.id,
+      auth_provider: google ? "google" : "guest",
     });
 
     const clientActiveAppointments = existing.filter(
@@ -200,6 +232,17 @@ export async function POST(request: NextRequest) {
       end_time: slotEndIso,
       notes,
     });
+
+    // Remember a Google customer's details so the next booking is one tap
+    if (google) {
+      await upsertCustomerProfile({
+        google_id: google.id,
+        email: google.email,
+        first_name,
+        last_name,
+        phone,
+      });
+    }
 
     // Never echo other people's data back to a public caller.
     return NextResponse.json({

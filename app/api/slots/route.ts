@@ -55,8 +55,9 @@ export async function GET(request: NextRequest) {
       const monthEnd = endOfMonth(monthStart);
       const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-      const startISO = `${format(monthStart, "yyyy-MM-dd")}T00:00:00.000Z`;
-      const endISO = `${format(monthEnd, "yyyy-MM-dd")}T23:59:59.999Z`;
+      // padded by a day each side: business days are Israel wall-clock, the DB stores UTC
+      const startISO = new Date(monthStart.getTime() - 36 * 3600 * 1000).toISOString();
+      const endISO = new Date(monthEnd.getTime() + 60 * 3600 * 1000).toISOString();
       const monthAppointments = await getAppointments(businessId, startISO, endISO);
 
       const monthDays: Record<
@@ -66,9 +67,8 @@ export async function GET(request: NextRequest) {
 
       for (const day of allDays) {
         const dayStr = format(day, "yyyy-MM-dd");
-        const dayApps = monthAppointments.filter((a) =>
-          a.start_time.startsWith(dayStr)
-        );
+        // the generator checks real instant overlap, so no per-day string filtering is needed
+        const dayApps = monthAppointments;
         const dayRes = generateAvailableSlots({
           business,
           service,
@@ -93,9 +93,7 @@ export async function GET(request: NextRequest) {
 
       if (dateParam) {
         const targetDate = parseISO(dateParam);
-        const targetApps = monthAppointments.filter((a) =>
-          a.start_time.startsWith(dateParam)
-        );
+        const targetApps = monthAppointments;
         selectedDateSlots = generateAvailableSlots({
           business,
           service,
@@ -122,8 +120,8 @@ export async function GET(request: NextRequest) {
 
   // Case 2: Only dateParam provided (backward compatibility)
   const selectedDate = parseISO(dateParam!);
-  const startOfDay = `${dateParam}T00:00:00.000Z`;
-  const endOfDay = `${dateParam}T23:59:59.999Z`;
+  const startOfDay = new Date(selectedDate.getTime() - 36 * 3600 * 1000).toISOString();
+  const endOfDay = new Date(selectedDate.getTime() + 60 * 3600 * 1000).toISOString();
   const appointments = await getAppointments(businessId, startOfDay, endOfDay);
 
   const result = generateAvailableSlots({

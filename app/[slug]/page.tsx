@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Business, Service, TimeSlot, Appointment } from "@/lib/types";
+import { supabase } from "@/lib/db/supabase";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -52,6 +53,8 @@ import {
 import { he } from "date-fns/locale";
 
 const STORAGE_KEY = "schedule_saved_client_v1";
+// Booking progress is parked here while the customer is away signing in with Google.
+const PENDING_KEY = "torli_pending_booking_v1";
 
 export default function BookingPage() {
   const params = useParams();
@@ -81,6 +84,7 @@ export default function BookingPage() {
   const [lastName, setLastName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [isGoogleClient, setIsGoogleClient] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [notes, setNotes] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [isClientLookupLoading, setIsClientLookupLoading] = useState(false);
@@ -133,6 +137,25 @@ export default function BookingPage() {
           if (sData.length > 0) {
             setSelectedService(sData[0]);
           }
+          // Returning from Google sign-in: put the customer back on the details step
+          try {
+            const raw = sessionStorage.getItem(PENDING_KEY);
+            if (raw) {
+              const pending = JSON.parse(raw);
+              const svc = sData.find((x: Service) => x.id === pending.serviceId);
+              if (pending.slug === slug && svc && pending.slot && pending.dateStr) {
+                const d = new Date(pending.dateStr + "T00:00:00");
+                setSelectedService(svc);
+                setSelectedDate(d);
+                setCurrentMonth(d);
+                setSelectedSlot(pending.slot);
+                setStep(3);
+              }
+              sessionStorage.removeItem(PENDING_KEY);
+            }
+          } catch {
+            // ignore
+          }
         }
       } catch (err) {
         console.error("Error loading business:", err);
@@ -154,12 +177,110 @@ export default function BookingPage() {
         if (parsed.firstName) setFirstName(parsed.firstName);
         if (parsed.lastName) setLastName(parsed.lastName);
         if (parsed.email) setClientEmail(parsed.email);
-        if (parsed.isGoogleClient) setIsGoogleClient(parsed.isGoogleClient);
       }
     } catch {
       // ignore
     }
   }, []);
+
+  // Real Google sign-in (Supabase Auth): prefill from the saved profile, or from the Google account
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+
+    const applySession = async (session: {
+      access_token: string;
+      user: { email?: string; user_metadata?: Record<string, any> };
+    }) => {
+      if (cancelled) return;
+      setIsGoogleClient(true);
+      setIsGoogleLoading(true);
+      const meta = session.user.user_metadata || {};
+      const fullName = String(meta.full_name || meta.name || "").trim();
+      const googleFirst = String(meta.given_name || fullName.split(" ")[0] || "");
+      const googleLast = String(meta.family_name || fullName.split(" ").slice(1).join(" ") || "");
+      setClientEmail(session.user.email || "");
+      try {
+        const res = await fetch("/api/customer/profile", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = res.ok ? await res.json() : null;
+        if (cancelled) return;
+        if (data?.profile) {
+          setFirstName(data.profile.first_name);
+          setLastName(data.profile.last_name);
+          setPhone(
+            data.profile.phone.length === 10
+              ? `${data.profile.phone.slice(0, 3)}-${data.profile.phone.slice(3)}`
+              : data.profile.phone
+          );
+          setIsReturningClient(true);
+        } else {
+          setFirstName((prev) => prev || googleFirst);
+          setLastName((prev) => prev || googleLast);
+        }
+      } catch {
+        setFirstName((prev) => prev || googleFirst);
+        setLastName((prev) => prev || googleLast);
+      } finally {
+        if (!cancelled) setIsGoogleLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user?.app_metadata?.provider === "google") {
+        applySession(data.session as any);
+      }
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") setIsGoogleClient(false);
+    });
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Start Google sign-in; the booking progress survives the redirect via sessionStorage
+  const handleGoogleSignIn = async () => {
+    if (!supabase || !selectedService || !selectedSlot) return;
+    triggerHaptic(20);
+    setIsGoogleLoading(true);
+    try {
+      sessionStorage.setItem(
+        PENDING_KEY,
+        JSON.stringify({
+          slug,
+          serviceId: selectedService.id,
+          dateStr: format(selectedDate, "yyyy-MM-dd"),
+          slot: selectedSlot,
+        })
+      );
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/${slug}` },
+      });
+      if (error) throw error;
+    } catch (err) {
+      console.error("Google sign-in error:", err);
+      sessionStorage.removeItem(PENDING_KEY);
+      setIsGoogleLoading(false);
+      alert("ההתחברות עם Google אינה זמינה כרגע. ניתן להמשיך כאורח.");
+    }
+  };
+
+  const handleGuestContinue = async () => {
+    triggerHaptic(15);
+    try {
+      await supabase?.auth.signOut();
+    } catch {
+      // ignore
+    }
+    setIsGoogleClient(false);
+    setIsReturningClient(false);
+    setClientEmail("");
+  };
 
   // Fetch month availability map whenever currentMonth, business or selectedService changes
   useEffect(() => {
@@ -314,6 +435,9 @@ export default function BookingPage() {
     setIsSubmitting(true);
 
     try {
+      const accessToken = isGoogleClient
+        ? (await supabase?.auth.getSession())?.data.session?.access_token
+        : undefined;
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -323,9 +447,8 @@ export default function BookingPage() {
           phone: cleanedPhone,
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          email: clientEmail.trim() || undefined,
-          google_id: isGoogleClient ? "google-client-sub" : undefined,
-          auth_provider: isGoogleClient ? "google" : "guest",
+          email: accessToken ? undefined : clientEmail.trim() || undefined,
+          access_token: accessToken,
           start_time: selectedSlot.startTime,
           notes: notes.trim() || undefined,
         }),
@@ -348,7 +471,6 @@ export default function BookingPage() {
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             email: clientEmail.trim() || undefined,
-            isGoogleClient,
           })
         );
       }
@@ -429,13 +551,28 @@ export default function BookingPage() {
             </div>
           </div>
 
-          <a
-            href={`tel:${business.owner_phone}`}
-            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
-            title="חייג לעסק"
-          >
-            <Phone className="w-4 h-4" />
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href={`https://wa.me/${toInternationalPhone(
+                business.settings?.whatsapp_phone || business.owner_phone
+              )}?text=${encodeURIComponent(`שלום ${business.name}, אשמח לקבל מידע / לקבוע תור`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors"
+              title="שלח וואטסאפ לעסק"
+              aria-label="שלח וואטסאפ לעסק"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+            <a
+              href={`tel:${business.owner_phone}`}
+              className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+              title="חייג לעסק"
+              aria-label="חייג לעסק"
+            >
+              <Phone className="w-4 h-4" />
+            </a>
+          </div>
         </div>
       </header>
 
@@ -969,14 +1106,8 @@ export default function BookingPage() {
                   type="button"
                   variant="outline"
                   size="md"
-                  onClick={() => {
-                    triggerHaptic(20);
-                    setIsGoogleClient(true);
-                    if (!firstName) setFirstName("ישראל");
-                    if (!lastName) setLastName("ישראלי");
-                    if (!clientEmail) setClientEmail("israel.israeli@gmail.com");
-                    if (!phone) setPhone("052-1234567");
-                  }}
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
                   className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-bold shadow-xs py-2.5"
                 >
                   <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
@@ -985,7 +1116,7 @@ export default function BookingPage() {
                     <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.94 0 12s.45 3.84 1.25 5.42l4.03-3.15z"/>
                     <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                   </svg>
-                  <span>התחבר עם Google (מילוי פרטים אוטומטי)</span>
+                  <span>{isGoogleLoading ? "מתחבר..." : "התחבר עם Google (שמירת פרטים להזמנות הבאות)"}</span>
                 </Button>
               ) : (
                 <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between text-right">
@@ -1000,10 +1131,7 @@ export default function BookingPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      triggerHaptic(15);
-                      setIsGoogleClient(false);
-                    }}
+                    onClick={handleGuestContinue}
                     className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
                   >
                     המשך כאורח
@@ -1013,7 +1141,7 @@ export default function BookingPage() {
             </div>
 
             {/* Returning Client Banner */}
-            {isReturningClient && !isGoogleClient && (
+            {isReturningClient && (
               <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-3 text-right">
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
                   <Sparkles className="w-4 h-4" />

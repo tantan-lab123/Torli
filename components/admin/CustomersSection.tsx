@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Users,
   Search,
@@ -13,6 +13,8 @@ import {
   Check,
   FileText,
   Download,
+  Upload,
+  Smartphone,
 } from "lucide-react";
 import { Client, Appointment, Service } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +22,12 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import {
+  RawContact,
+  isContactPickerSupported,
+  parseContactsFile,
+  pickContactsFromPhone,
+} from "@/lib/contacts";
 import { formatPhone, toInternationalPhone, formatTime, formatHebrewDate, formatShortDate, triggerHaptic, validatePhoneNumber } from "@/lib/utils";
 
 interface CustomersSectionProps {
@@ -29,6 +37,9 @@ interface CustomersSectionProps {
   businessId: string;
   onAddClient?: (client: Partial<Client>) => void;
   onUpdateClientNotes?: (clientId: string, notes: string) => void;
+  onImportContacts?: (
+    contacts: RawContact[]
+  ) => Promise<{ added: number; skipped: number; invalid: number }>;
 }
 
 export const CustomersSection: React.FC<CustomersSectionProps> = ({
@@ -38,8 +49,64 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
   businessId,
   onAddClient,
   onUpdateClientNotes,
+  onImportContacts,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Contacts import (phone contact picker / vCard / CSV)
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importContacts, setImportContacts] = useState<RawContact[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
+  const [pickerSupported, setPickerSupported] = useState(false);
+  useEffect(() => {
+    setPickerSupported(isContactPickerSupported());
+  }, []);
+
+  const resetImport = () => {
+    setImportContacts([]);
+    setImportMessage("");
+    setImportBusy(false);
+  };
+
+  const handlePickFromPhone = async () => {
+    try {
+      const picked = await pickContactsFromPhone();
+      setImportContacts(picked);
+      setImportMessage(picked.length ? "" : "לא נבחרו אנשי קשר");
+    } catch {
+      setImportMessage("לא ניתן לגשת לאנשי הקשר. אפשר להעלות קובץ במקום.");
+    }
+  };
+
+  const handleContactsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5_000_000) {
+      setImportMessage("הקובץ גדול מדי (עד 5MB)");
+      return;
+    }
+    const parsed = await parseContactsFile(file);
+    setImportContacts(parsed);
+    setImportMessage(parsed.length ? "" : "לא נמצאו אנשי קשר עם מספר טלפון בקובץ");
+  };
+
+  const handleConfirmImport = async () => {
+    if (!onImportContacts || importContacts.length === 0) return;
+    setImportBusy(true);
+    try {
+      const r = await onImportContacts(importContacts.slice(0, 2000));
+      setImportMessage(
+        `נוספו ${r.added} לקוחות חדשים. ${r.skipped} כבר היו קיימים, ${r.invalid} דולגו (מספר לא תקין / לא נייד).`
+      );
+      setImportContacts([]);
+    } catch {
+      setImportMessage("שגיאה בייבוא. אנא נסה שוב.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [clientNotesEdit, setClientNotesEdit] = useState("");
@@ -225,6 +292,22 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
           <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl whitespace-nowrap">
             סה&quot;כ {clients.length} לקוחות
           </div>
+          {onImportContacts && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                triggerHaptic(20);
+                resetImport();
+                setIsImportOpen(true);
+              }}
+              className="shadow-2xs whitespace-nowrap border-slate-200 hover:bg-slate-50 text-slate-700"
+              title="ייבוא לקוחות מאנשי הקשר בטלפון"
+            >
+              <Upload className="w-4 h-4 ml-1 text-indigo-600" />
+              <span>ייבוא אנשי קשר</span>
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -493,6 +576,62 @@ export const CustomersSection: React.FC<CustomersSectionProps> = ({
           </div>
         </Modal>
       )}
+
+      {/* Import contacts modal */}
+      <Modal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        title="ייבוא לקוחות מאנשי הקשר"
+      >
+        <div className="space-y-4 text-right">
+          <p className="text-sm text-slate-600 leading-relaxed">
+            הוסף בבת אחת את אנשי הקשר מהטלפון שלך כלקוחות. נוספים רק מספרי נייד ישראליים, ומספרים שכבר קיימים אצלך מדולגים.
+          </p>
+
+          {pickerSupported && (
+            <Button type="button" variant="primary" className="w-full" onClick={handlePickFromPhone}>
+              <Smartphone className="w-4 h-4 ml-1" />
+              <span>בחר אנשי קשר מהטלפון</span>
+            </Button>
+          )}
+
+          <label className="block w-full cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-400 p-4 text-center transition-colors">
+            <Upload className="w-5 h-5 mx-auto text-indigo-600 mb-1" />
+            <span className="block text-sm font-bold text-slate-800">העלאת קובץ אנשי קשר (.vcf או .csv)</span>
+            <span className="block text-xs text-slate-500 mt-1">
+              באייפון: אנשי קשר ← סמן הכול ← שתף ← שמור לקבצים. באנדרואיד / Google Contacts: ייצוא ← vCard או CSV.
+            </span>
+            <input type="file" accept=".vcf,.csv,text/vcard,text/csv" className="hidden" onChange={handleContactsFile} />
+          </label>
+
+          {importContacts.length > 0 && (
+            <div className="rounded-2xl bg-indigo-50 border border-indigo-200/70 p-3 text-sm">
+              <div className="font-bold text-indigo-950 mb-1">נמצאו {importContacts.length} מספרים לייבוא</div>
+              <ul className="text-xs text-indigo-800 space-y-0.5 max-h-28 overflow-auto">
+                {importContacts.slice(0, 5).map((c, i) => (
+                  <li key={i}>
+                    {c.first_name} {c.last_name} · {c.phone}
+                  </li>
+                ))}
+                {importContacts.length > 5 && <li>ועוד {importContacts.length - 5}...</li>}
+              </ul>
+              <Button
+                type="button"
+                variant="primary"
+                className="w-full mt-3"
+                onClick={handleConfirmImport}
+                disabled={importBusy}
+              >
+                {importBusy ? "מייבא..." : `ייבא ${importContacts.length} אנשי קשר`}
+              </Button>
+            </div>
+          )}
+
+          {importMessage && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700">{importMessage}</div>
+          )}
+        </div>
+      </Modal>
 
       {/* Add New Client Modal */}
       <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="הוספת לקוח חדש למאגר">

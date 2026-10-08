@@ -1,5 +1,10 @@
 import { Business, Service, Appointment, TimeSlot, DayOfWeek } from "@/lib/types";
-import { parse, format, addMinutes, isBefore, isAfter, isSameDay, startOfToday } from "date-fns";
+import { format, addMinutes, isBefore, isAfter } from "date-fns";
+import { TZDate } from "@date-fns/tz";
+
+// All business hours are wall-clock times in Israel. The server runs in UTC, so every
+// calculation below is done in this zone and slots are returned as true UTC instants.
+export const BUSINESS_TZ = "Asia/Jerusalem";
 
 const DAY_NAMES_MAP: Record<number, DayOfWeek> = {
   0: "sunday",
@@ -11,10 +16,22 @@ const DAY_NAMES_MAP: Record<number, DayOfWeek> = {
   6: "saturday",
 };
 
+/** "YYYY-MM-DD" of an instant as seen on the wall clock in Israel. */
+export function israelDateString(instant: Date | string): string {
+  return format(new TZDate(new Date(instant), BUSINESS_TZ), "yyyy-MM-dd");
+}
+
+/** Wall-clock "YYYY-MM-DD" + "HH:mm" in Israel -> TZDate (a real instant). */
+function israelTime(dateStr: string, hhmm: string): TZDate {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [hh, mm] = hhmm.split(":").map(Number);
+  return new TZDate(y, m - 1, d, hh, mm, 0, 0, BUSINESS_TZ);
+}
+
 export interface SlotGeneratorOptions {
   business: Business;
   service: Service;
-  selectedDate: Date;
+  selectedDate: Date; // only its calendar day (yyyy-MM-dd) is used
   existingAppointments: Appointment[];
   stepMinutes?: number; // default 15 or 30 mins
 }
@@ -31,9 +48,11 @@ export function generateAvailableSlots({
   message?: string;
 } {
   const dateStr = format(selectedDate, "yyyy-MM-dd");
+  const now = new TZDate(Date.now(), BUSINESS_TZ);
+  const todayStr = format(now, "yyyy-MM-dd");
 
-  // Check if date is in the past
-  if (isBefore(selectedDate, startOfToday())) {
+  // Check if date is in the past (Israel calendar)
+  if (dateStr < todayStr) {
     return {
       slots: [],
       isOpenToday: false,
@@ -53,7 +72,7 @@ export function generateAvailableSlots({
     }
   }
 
-  const dayIndex = selectedDate.getDay();
+  const dayIndex = israelTime(dateStr, "12:00").getDay();
   const dayName = DAY_NAMES_MAP[dayIndex];
   const dayConfig = business.working_hours[dayName];
 
@@ -69,8 +88,8 @@ export function generateAvailableSlots({
   const effectiveOpen = dateOverride?.custom_open || dayConfig.open;
   const effectiveClose = dateOverride?.custom_close || dayConfig.close;
 
-  const openTime = parse(`${dateStr} ${effectiveOpen}`, "yyyy-MM-dd HH:mm", new Date());
-  const closeTime = parse(`${dateStr} ${effectiveClose}`, "yyyy-MM-dd HH:mm", new Date());
+  const openTime = israelTime(dateStr, effectiveOpen);
+  const closeTime = israelTime(dateStr, effectiveClose);
 
   const totalRequiredMinutes = service.duration_minutes + (service.buffer_minutes || 0);
 
@@ -83,16 +102,15 @@ export function generateAvailableSlots({
     dayConfig.lunch_break.start &&
     dayConfig.lunch_break.end
       ? {
-          start: parse(`${dateStr} ${dayConfig.lunch_break.start}`, "yyyy-MM-dd HH:mm", new Date()),
-          end: parse(`${dateStr} ${dayConfig.lunch_break.end}`, "yyyy-MM-dd HH:mm", new Date()),
+          start: israelTime(dateStr, dayConfig.lunch_break.start),
+          end: israelTime(dateStr, dayConfig.lunch_break.end),
         }
       : null;
 
   // Active confirmed appointments
   const activeAppointments = existingAppointments.filter((app) => app.status === "confirmed");
 
-  const now = new Date();
-  const isToday = isSameDay(selectedDate, now);
+  const isToday = dateStr === todayStr;
 
   const slots: TimeSlot[] = [];
   let currentPointer = openTime;
@@ -130,8 +148,8 @@ export function generateAvailableSlots({
       }
 
       slots.push({
-        startTime: currentPointer.toISOString(),
-        endTime: slotEnd.toISOString(),
+        startTime: new Date(currentPointer.getTime()).toISOString(),
+        endTime: new Date(slotEnd.getTime()).toISOString(),
         formattedTime: format(currentPointer, "HH:mm"),
         period,
         available: true,

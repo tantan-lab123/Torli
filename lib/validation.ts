@@ -104,3 +104,13 @@ export function sanitizeDateOverrides(raw: unknown): DateOverride[] | null {
   }
   return out;
 }
+
+/** Israeli mobile number from any common format (+972-50-..., 050 123 4567) -> "05XXXXXXXX", else null. */
+export function normalizeIsraeliMobile(raw: unknown): string | null {
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  let d = String(raw).replace(/[^0-9]/g, "");
+  if (d.startsWith("00972")) d = d.slice(5);
+  else if (d.startsWith("972")) d = d.slice(3);
+  if (d.length === 9 && d.startsWith("5")) d = "0" + d;
+  return /^05[0-9]{8}$/.test(d) ? d : null;
+}
