@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Sparkles,
   AlertCircle,
-  Lock,
   CalendarX,
   Palmtree,
   KeyRound,
@@ -81,6 +80,8 @@ import {
 } from "date-fns";
 import { he } from "date-fns/locale";
 import { AdminTopBar, AdminTab } from "@/components/admin/AdminTopBar";
+import { NextUpTicket } from "@/components/admin/NextUpTicket";
+import { Logo } from "@/components/brand/Logo";
 import { AdminFAB } from "@/components/admin/AdminFAB";
 import { CustomersSection } from "@/components/admin/CustomersSection";
 import { StatsSection } from "@/components/admin/StatsSection";
@@ -1073,50 +1074,52 @@ export default function AdminDashboardPage() {
   // =========================================================================
   if (!selectedBusiness) {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
+      <div className="min-h-screen bg-paper flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full space-y-6">
-          {/* SaaS Branding Header */}
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-3xl bg-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-extrabold text-slate-900">
-              כניסה פרטית לבעלי עסקים
+          {/* Brand header */}
+          <div className="text-center space-y-3">
+            <Logo size={40} className="justify-center" />
+            <h1 className="text-2xl font-extrabold text-ink-900">
+              כניסה לבעלי עסקים
             </h1>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto">
-              התחבר לחשבון העסק שלך באופן פרטי ומאובטח או פתח חשבון עסק חדש
+            <p className="text-sm text-ink-600 max-w-xs mx-auto">
+              היומן, הלקוחות וההגדרות של העסק שלך, במקום אחד
             </p>
           </div>
 
           {/* Tab Switcher: Login / Register */}
-          <div className="flex bg-slate-200 p-1 rounded-2xl">
+          <div role="tablist" className="flex bg-ink-100 border border-ink-200 p-1 rounded-lg">
             <button
               onClick={() => {
                 setAuthTab("login");
                 setLoginError("");
               }}
+              role="tab"
+              aria-selected={authTab === "login"}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "m-press flex-1 h-11 rounded-md text-sm font-bold",
                 authTab === "login"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-ink-600 hover:text-ink-900"
               )}
             >
-              התחברות לעסק שלי
+              כניסה
             </button>
             <button
               onClick={() => {
                 setAuthTab("register");
                 setRegError("");
               }}
+              role="tab"
+              aria-selected={authTab === "register"}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "m-press flex-1 h-11 rounded-md text-sm font-bold",
                 authTab === "register"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-ink-600 hover:text-ink-900"
               )}
             >
-              הרשמת עסק חדש 🚀
+              עסק חדש
             </button>
           </div>
 
@@ -1300,7 +1303,7 @@ export default function AdminDashboardPage() {
 
               {/* 1-Tap Google Registration / Connected Status */}
               {googleUser ? (
-                <div className="p-4 rounded-2xl bg-gradient-to-l from-emerald-50 to-teal-50 border border-emerald-200 text-right space-y-2.5 shadow-xs">
+                <div className="p-4 rounded-xl bg-success-50 border border-success-200 text-right space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
@@ -1548,7 +1551,7 @@ export default function AdminDashboardPage() {
                   <Sparkles className="w-4 h-4 ml-2" />
                   <span>
                     {googleUser
-                      ? "המשך להגדרת שעות פעילות 🚀"
+                      ? "המשך להגדרת שעות פעילות"
                       : "המשך להגדרת שעות פעילות"}
                   </span>
                 </Button>
@@ -1575,17 +1578,17 @@ export default function AdminDashboardPage() {
     };
 
     return (
-      <div className="min-h-screen bg-slate-50 py-10 px-4">
+      <div className="min-h-screen bg-paper py-10 px-4">
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
           {/* Header */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3.5 py-1 rounded-full text-xs font-black shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 bg-lime text-lime-ink px-3 py-1 rounded text-xs font-bold">
               <span>שלב 2 מתוך 2</span>
               <span>•</span>
               <span>הגדרת שעות פתיחה לעסק</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-              ברוך הבא ל-Torli, {selectedBusiness.name}! 🎉
+              ברוך הבא ל-Torli, {selectedBusiness.name}
             </h1>
             <p className="text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
               העסק נוצר בהצלחה! כעת בחר באילו ימים ושעות העסק שלך יהיה פתוח לקבלת תורים מלקוחות.
@@ -1593,7 +1596,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Weekly Schedule Card */}
-          <Card className="p-6 bg-white border border-slate-200 shadow-sm rounded-3xl space-y-5 text-right">
+          <Card className="p-6 space-y-5 text-right">
             {/* Preset shortcuts */}
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-500">תבניות מהירות:</span>
@@ -1748,7 +1751,7 @@ export default function AdminDashboardPage() {
                 className="w-full sm:w-auto shadow-lg shadow-indigo-600/25 px-8"
               >
                 <Sparkles className="w-4 h-4 ml-2" />
-                <span>שמור שעות והיכנס ליומן 🚀</span>
+                <span>שמירה וכניסה ליומן</span>
               </Button>
             </div>
           </Card>
@@ -1761,7 +1764,7 @@ export default function AdminDashboardPage() {
   // AUTHENTICATED: SCOPED PRIVATE DASHBOARD
   // =========================================================================
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-24">
+    <div className="min-h-screen bg-paper text-ink-900 pb-28 md:pb-24">
       {/* SaaS 11-Destination Top Navigation Bar */}
       <AdminTopBar
         business={selectedBusiness}
@@ -1774,21 +1777,22 @@ export default function AdminDashboardPage() {
 
       {/* Real-time New Booking Toast Banner */}
       {newBookingBanner && (
-        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white px-4 py-2.5 shadow-md flex items-center justify-between animate-in slide-in-from-top duration-300 z-50 sticky top-16">
+        <div role="status" aria-live="polite" className="m-toast bg-ink-900 text-white px-4 py-2.5 shadow-lg flex items-center justify-between z-50 sticky top-14 md:top-[106px]">
           <div className="flex items-center gap-3 max-w-7xl mx-auto w-full">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+            <div className="w-8 h-8 rounded-lg bg-lime text-lime-ink flex items-center justify-center flex-shrink-0">
+              <CalendarDays className="w-4 h-4" />
             </div>
             <div className="flex-1 text-right">
-              <span className="font-extrabold text-xs sm:text-sm block">תור חדש נקבע כעת במערכת! 🚀</span>
-              <span className="text-[11px] sm:text-xs text-emerald-100">
+              <span className="font-extrabold text-sm block">תור חדש נקבע</span>
+              <span className="text-xs text-ink-300">
                 {newBookingBanner.clientName} הזמין/ה תור ל-{newBookingBanner.serviceName} בשעה {newBookingBanner.time}
               </span>
             </div>
             <button
               onClick={() => setNewBookingBanner(null)}
-              className="p-1.5 rounded-xl hover:bg-white/20 transition-colors text-white/80 hover:text-white flex-shrink-0"
-              title="סגור התראה"
+              className="m-press w-11 h-11 -ml-2 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white flex-shrink-0"
+              title="סגירת ההתראה"
+              aria-label="סגירת ההתראה"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1804,23 +1808,27 @@ export default function AdminDashboardPage() {
         {activeTab === "calendar" && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Staff Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                <span className="text-xs font-bold text-slate-500 whitespace-nowrap ml-1">סינון לפי עובד:</span>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+              <div
+                role="group"
+                aria-label="סינון לפי איש צוות"
+                className={cn("flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5", employees.length === 0 && "hidden")}
+              >
                 <button
                   type="button"
                   onClick={() => {
                     triggerHaptic(10);
                     setSelectedStaffId("all");
                   }}
+                  aria-pressed={selectedStaffId === "all"}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    "m-chip m-press h-10 px-3.5 rounded-md text-sm font-bold whitespace-nowrap border",
                     selectedStaffId === "all"
-                      ? "bg-indigo-600 text-white shadow-2xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white text-ink-700 border-ink-200"
                   )}
                 >
-                  כל הצוות ({employees.length})
+                  כל הצוות
                 </button>
                 {employees.map((emp) => (
                   <button
@@ -1830,11 +1838,12 @@ export default function AdminDashboardPage() {
                       triggerHaptic(10);
                       setSelectedStaffId(emp.id);
                     }}
+                    aria-pressed={selectedStaffId === emp.id}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap",
+                      "m-chip m-press h-10 px-3.5 rounded-md text-sm font-bold flex items-center gap-1 whitespace-nowrap border",
                       selectedStaffId === emp.id
-                        ? "bg-indigo-600 text-white shadow-2xs"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        ? "bg-brand-600 text-white border-brand-600"
+                        : "bg-white text-ink-700 border-ink-200"
                     )}
                   >
                     <span>{emp.name.split(" ")[0]}</span>
@@ -1842,27 +1851,29 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
 
-              <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 text-right whitespace-nowrap">
-                <span>{dailyAppointments.length} תורים נקבעו ליום זה</span>
+              <div className="hidden sm:block text-xs font-semibold text-ink-600 text-right whitespace-nowrap">
+                <span>{dailyAppointments.length} תורים ביום הזה</span>
               </div>
             </div>
             {/* Schedule View Segment Control */}
-            <div className="flex bg-slate-200/85 p-1 rounded-2xl">
+            <div role="radiogroup" aria-label="תצוגת יומן" className="flex bg-ink-100 border border-ink-200 p-1 rounded-lg">
               <button
                 type="button"
                 onClick={() => {
                   triggerHaptic(10);
                   setScheduleMode("day");
                 }}
+                role="radio"
+                aria-checked={scheduleMode === "day"}
                 className={cn(
-                  "flex-1 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                  "m-press flex-1 h-10 rounded-md text-[13px] font-bold flex items-center justify-center gap-1.5",
                   scheduleMode === "day"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-ink-600 hover:text-ink-900"
                 )}
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>יומן יומי ({format(selectedDate, "dd/MM")})</span>
+                <span>יום</span>
               </button>
               <button
                 type="button"
@@ -1870,28 +1881,33 @@ export default function AdminDashboardPage() {
                   triggerHaptic(10);
                   setScheduleMode("month");
                 }}
+                role="radio"
+                aria-checked={scheduleMode === "month"}
                 className={cn(
-                  "flex-1 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                  "m-press flex-1 h-10 rounded-md text-[13px] font-bold flex items-center justify-center gap-1.5",
                   scheduleMode === "month"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-ink-600 hover:text-ink-900"
                 )}
               >
                 <CalendarDays className="w-3.5 h-3.5" />
-                <span>לוח חודשי וסגירת יום/שבוע</span>
+                <span>חודש וסגירת ימים</span>
               </button>
             </div>
 
             {/* SUB-VIEW 1: DETAILED DAILY SCHEDULE */}
             {scheduleMode === "day" && (
               <div className="space-y-4">
+                {isSameDay(selectedDate, startOfToday()) && <NextUpTicket appointments={dailyAppointments} />}
+
                 {/* Date Navigator Bar */}
-                <Card className="p-3">
+                <Card className="p-2">
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => setSelectedDate((d) => addDays(d, 1))}
-                  className="p-2 rounded-xl hover:bg-slate-100 active:bg-slate-200 text-slate-600"
+                  className="m-key2 w-11 h-11 rounded-lg border border-ink-200 bg-white flex items-center justify-center text-ink-800"
                   title="יום הבא"
+                  aria-label="יום הבא"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -1912,13 +1928,13 @@ export default function AdminDashboardPage() {
                   )}
                   <div className="flex items-center justify-center gap-2 text-xs text-slate-500 mt-0.5">
                     {isSameDay(selectedDate, startOfToday()) ? (
-                      <span className="text-emerald-600 font-semibold">היום</span>
+                      <span className="bg-lime text-lime-ink font-bold px-1.5 rounded">היום</span>
                     ) : (
                       <button
                         onClick={() => setSelectedDate(startOfToday())}
-                        className="text-indigo-600 hover:underline"
+                        className="text-brand-600 font-bold underline"
                       >
-                        קפוץ להיום
+                        חזרה להיום
                       </button>
                     )}
                   </div>
@@ -1926,8 +1942,9 @@ export default function AdminDashboardPage() {
 
                 <button
                   onClick={() => setSelectedDate((d) => subDays(d, 1))}
-                  className="p-2 rounded-xl hover:bg-slate-100 active:bg-slate-200 text-slate-600"
+                  className="m-key2 w-11 h-11 rounded-lg border border-ink-200 bg-white flex items-center justify-center text-ink-800"
                   title="יום קודם"
+                  aria-label="יום קודם"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -1936,47 +1953,47 @@ export default function AdminDashboardPage() {
 
             {/* Daily KPI Stats Bar */}
             <div className="grid grid-cols-3 gap-2.5">
-              <div className="bg-white rounded-2xl p-3 border border-slate-200/80 text-center shadow-soft">
-                <span className="text-xs text-slate-400 block font-medium">
-                  תורים מאושרים
+              <div className="bg-white rounded-xl p-3 border border-ink-200 text-right">
+                <span className="text-xs text-ink-600 block font-medium">
+                  מאושרים
                 </span>
-                <span className="text-xl font-extrabold text-indigo-600">
+                <span className="text-2xl font-extrabold text-ink-900">
                   {dailyStats.confirmed}
                 </span>
               </div>
-              <div className="bg-white rounded-2xl p-3 border border-slate-200/80 text-center shadow-soft">
-                <span className="text-xs text-slate-400 block font-medium">בוטלו</span>
-                <span className="text-xl font-extrabold text-rose-500">
+              <div className="bg-white rounded-xl p-3 border border-ink-200 text-right">
+                <span className="text-xs text-ink-600 block font-medium">בוטלו</span>
+                <span className="text-2xl font-extrabold text-ink-900">
                   {dailyStats.cancelled}
                 </span>
               </div>
-              <div className="bg-white rounded-2xl p-3 border border-slate-200/80 text-center shadow-soft">
-                <span className="text-xs text-slate-400 block font-medium">
-                  הכנסה משוערת
+              <div className="bg-white rounded-xl p-3 border border-ink-200 text-right">
+                <span className="text-xs text-ink-600 block font-medium">
+                  הכנסה צפויה
                 </span>
-                <span className="text-xl font-extrabold text-emerald-600">
+                <span className="text-2xl font-extrabold text-ink-900">
                   ₪{dailyStats.revenue}
                 </span>
               </div>
             </div>
 
             {/* Quick Action Buttons for One-Thumb Reach */}
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="hidden md:grid grid-cols-2 gap-2.5">
               <Button
                 variant="primary"
                 onClick={() => setIsQuickAddOpen(true)}
-                className="h-12 rounded-2xl text-xs sm:text-sm font-bold shadow-md shadow-indigo-600/20"
+                className="h-12 text-sm"
               >
-                <Plus className="w-4 h-4 ml-1.5" />
-                <span>הוסף לקוח / תור ידני</span>
+                <Plus className="w-4 h-4 text-lime" />
+                <span>תור חדש</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsBlockTimeOpen(true)}
-                className="h-12 rounded-2xl text-xs sm:text-sm font-bold text-amber-700 border-amber-300 bg-amber-50/50 hover:bg-amber-100/50"
+                className="h-12 text-sm"
               >
-                <Ban className="w-4 h-4 ml-1.5 text-amber-600" />
-                <span>חסימת זמן חד-פעמית</span>
+                <Ban className="w-4 h-4 text-pending-600" />
+                <span>חסימת זמן</span>
               </Button>
             </div>
 
@@ -1994,11 +2011,12 @@ export default function AdminDashboardPage() {
                       localStorage.setItem("torli_admin_sound", String(next));
                       if (next) playNotificationChime();
                     }}
+                    aria-pressed={soundEnabled}
                     className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all border shadow-2xs",
+                      "m-press flex items-center gap-1.5 h-9 px-2.5 rounded-md text-xs font-bold border",
                       soundEnabled
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                        : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200"
+                        ? "bg-success-100 text-success-700 border-success-200"
+                        : "bg-white text-ink-500 border-ink-200"
                     )}
                     title={soundEnabled ? "התראות קוליות מופעלות - לחץ להשתקה" : "התראות קוליות מושתקות - לחץ להפעלה"}
                   >
@@ -2012,7 +2030,7 @@ export default function AdminDashboardPage() {
 
                   <button
                     onClick={() => fetchAppointments(false)}
-                    className="flex items-center gap-1 hover:text-indigo-600 transition-colors px-2.5 py-1 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold shadow-2xs"
+                    className="m-press flex items-center gap-1 h-9 px-2.5 rounded-md bg-white border border-ink-200 text-ink-700 font-bold"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
                     <span>רענן</span>
@@ -2023,7 +2041,7 @@ export default function AdminDashboardPage() {
               <WaitlistPanel businessName={selectedBusiness.name} />
 
               {dailyAppointments.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-8 text-center">
+                <div className="bg-white rounded-xl border border-dashed border-ink-300 p-8 text-center">
                   <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                   <h4 className="font-bold text-slate-800 mb-1">אין תורים ביום זה</h4>
                   <p className="text-xs text-slate-500">
@@ -2059,12 +2077,12 @@ export default function AdminDashboardPage() {
                     <div
                       key={app.id}
                       className={cn(
-                        "rounded-2xl border p-4 bg-white transition-all shadow-soft",
+                        "rounded-xl border p-4 bg-white transition-all",
                         isCancelled
-                          ? "opacity-60 bg-slate-50 border-slate-200"
+                          ? "opacity-60 bg-paper border-ink-200"
                           : isBlockedSlot
-                          ? "border-amber-200 bg-amber-50/40"
-                          : "border-slate-200/90"
+                          ? "border-pending-200 bg-pending-50"
+                          : "border-ink-200"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -2083,13 +2101,13 @@ export default function AdminDashboardPage() {
                             )}
                           </div>
 
-                          <div className="text-xs font-semibold text-indigo-600 mt-0.5">
+                          <div className="text-sm font-medium text-ink-600 mt-0.5">
                             {app.service?.name || "שירות כללי"}
                             {app.service?.price ? ` • ₪${app.service.price}` : ""}
                           </div>
 
                           {app.notes && (
-                            <p className="text-xs text-slate-500 mt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                            <p className="text-xs text-ink-700 mt-1.5 bg-paper px-2 py-1.5 rounded-md border border-ink-200">
                               {app.notes}
                             </p>
                           )}
@@ -2106,7 +2124,7 @@ export default function AdminDashboardPage() {
                                 });
                                 fetchAppointments(true);
                               }}
-                              className="mt-1.5 h-8 rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                              className="mt-2 h-9 rounded-md border border-ink-200 bg-white px-2 text-xs font-semibold text-ink-700"
                               title="שייך את התור לעובד"
                             >
                               <option value="">ללא עובד מוגדר</option>
@@ -2123,11 +2141,11 @@ export default function AdminDashboardPage() {
 
                         {/* Left: Time badge */}
                         <div className="text-left flex-shrink-0">
-                          <div className="px-3 py-1.5 bg-slate-100 rounded-xl text-center">
-                            <span className="text-sm font-extrabold text-slate-900 block leading-none">
+                          <div className="text-left">
+                            <span className="text-xl font-extrabold text-ink-900 block leading-none tracking-tight">
                               {formatTime(app.start_time)}
                             </span>
-                            <span className="text-[11px] text-slate-500 leading-tight">
+                            <span className="text-xs text-ink-500 leading-tight">
                               עד {formatTime(app.end_time)}
                             </span>
                           </div>
@@ -2136,13 +2154,13 @@ export default function AdminDashboardPage() {
 
                       {/* Direct Action Buttons: "חייג" & "וואטסאפ" */}
                       {!isBlockedSlot && !isCancelled && clientPhone && (
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-ink-100">
                           <a
                             href={`tel:${clientPhone}`}
-                            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-slate-100 text-slate-800 font-bold text-xs hover:bg-slate-200 active:bg-slate-300 transition-colors"
+                            className="m-key2 flex-1 flex items-center justify-center gap-1.5 h-11 rounded-lg border border-ink-200 bg-white text-ink-900 font-bold text-xs"
                           >
-                            <Phone className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>חייג ({formatPhone(clientPhone)})</span>
+                            <Phone className="w-4 h-4 text-ink-600" />
+                            <span dir="ltr">{formatPhone(clientPhone)}</span>
                           </a>
 
                           <a
@@ -2151,16 +2169,17 @@ export default function AdminDashboardPage() {
                             )}?text=${waGreeting}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs border border-emerald-200 hover:bg-emerald-100 active:bg-emerald-200 transition-colors"
+                            className="m-key flex-1 flex items-center justify-center gap-1.5 h-11 rounded-lg bg-brand-600 text-white font-bold text-xs"
                           >
-                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <MessageCircle className="w-4 h-4 text-lime" />
                             <span>וואטסאפ</span>
                           </a>
 
                           <button
                             onClick={() => handleCancelAppointment(app.id)}
-                            className="h-10 px-3 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs hover:bg-rose-100 transition-colors"
-                            title="בטל תור"
+                            className="m-key2 h-11 w-11 flex-none flex items-center justify-center rounded-lg border border-danger-200 bg-white text-danger-600"
+                            title="ביטול התור"
+                            aria-label="ביטול התור"
                           >
                             <XCircle className="w-4 h-4" />
                           </button>
@@ -2168,10 +2187,10 @@ export default function AdminDashboardPage() {
                       )}
 
                       {(isCancelled || isBlockedSlot) && (
-                        <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+                        <div className="flex justify-end mt-2 pt-2 border-t border-ink-100">
                           <button
                             onClick={() => handleCancelAppointment(app.id)}
-                            className="text-xs text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                            className="m-press min-h-[40px] px-2 text-xs font-semibold text-ink-500 hover:text-danger-600 flex items-center gap-1"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>הסר מהלוח</span>
@@ -2598,7 +2617,7 @@ export default function AdminDashboardPage() {
             />
 
             {/* Cron Reminders Tester Card */}
-            <Card className="p-5 space-y-3 bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100 text-right">
+            <Card className="p-5 space-y-3 text-right">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
                   <Send className="w-5 h-5" />

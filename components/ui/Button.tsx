@@ -29,28 +29,23 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       if (onClick) onClick(e);
     };
 
+    // Primary actions are "keys": a hard edge underneath that the button sinks into.
     const baseStyles =
-      "inline-flex items-center justify-center font-medium rounded-2xl transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none select-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30";
+      "inline-flex items-center justify-center font-semibold rounded-lg disabled:opacity-50 disabled:pointer-events-none select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
 
     const variantStyles = {
-      primary:
-        "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:bg-indigo-800",
-      secondary:
-        "bg-slate-100 text-slate-900 hover:bg-slate-200 active:bg-slate-300",
-      outline:
-        "border-2 border-slate-200 bg-white text-slate-800 hover:bg-slate-50 hover:border-slate-300 active:bg-slate-100",
-      ghost:
-        "text-slate-700 hover:bg-slate-100 active:bg-slate-200",
-      destructive:
-        "bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-500/20 active:bg-red-700",
-      success:
-        "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20 active:bg-emerald-800",
+      primary: "m-key bg-brand-600 text-white hover:bg-brand-700",
+      secondary: "m-key2 border border-ink-200 bg-white text-ink-900",
+      outline: "m-key2 border border-ink-200 bg-white text-ink-900",
+      ghost: "m-press text-ink-700 hover:bg-ink-100 active:bg-ink-200",
+      destructive: "m-key bg-danger-600 text-white hover:bg-danger-700",
+      success: "m-key bg-lime text-lime-ink",
     };
 
     const sizeStyles = {
-      sm: "text-xs px-3 py-1.5 h-8 gap-1.5",
-      md: "text-sm px-4 py-2.5 h-11 gap-2",
-      lg: "text-base px-6 py-3.5 h-13 font-semibold gap-2.5",
+      sm: "text-xs px-3 h-9 gap-1.5",
+      md: "text-sm px-4 h-11 gap-2",
+      lg: "text-base px-6 h-[52px] gap-2.5",
       icon: "h-11 w-11 p-0",
     };
 
@@ -59,6 +54,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         onClick={handleClick}
+        aria-busy={isLoading || undefined}
         className={cn(
           baseStyles,
           variantStyles[variant],
@@ -68,26 +64,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading ? (
-          <svg
-            className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+          <span
+            aria-hidden="true"
+            className={cn("m-spin", variant !== "primary" && "m-spin-dark")}
+          />
         ) : null}
         {children}
       </button>

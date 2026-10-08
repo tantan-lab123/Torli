@@ -1,22 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Rubik } from "next/font/google";
+import { Heebo } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const rubik = Rubik({
+// Brand font: Plinko FS (variable weight 100-800). Heebo is the fallback.
+const plinko = localFont({
+  src: "./fonts/PlinkoFS-VF.woff2",
+  weight: "100 800",
+  variable: "--font-brand",
+  display: "swap",
+});
+
+const heebo = Heebo({
   subsets: ["hebrew", "latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-rubik",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-heebo",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "מערכת תורים חכמה | Scheduling SaaS",
-  description: "מערכת קביעת וניהול תורים מתקדמת ומותאמת למובייל עבור בעלי עסקים בישראל",
-  applicationName: "ScheduleApp",
+  title: "Torli | תורים בלי טלפונים",
+  description: "תורלי: קביעת תורים מהטלפון לעסקים קטנים. הלקוחות קובעים לבד, התזכורות יוצאות בוואטסאפ.",
+  applicationName: "Torli",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "תורים",
+    title: "Torli",
   },
 };
 
@@ -24,7 +33,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#4f46e5",
+  themeColor: "#1E4D36",
 };
 
 export default function RootLayout({
@@ -33,8 +42,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="he" dir="rtl" className={rubik.variable}>
-      <body className="font-sans antialiased bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
+    <html lang="he" dir="rtl" className={`${plinko.variable} ${heebo.variable}`}>
+      <body className="font-sans antialiased bg-paper text-ink-900">
         <main className="min-h-screen flex flex-col">{children}</main>
       </body>
     </html>

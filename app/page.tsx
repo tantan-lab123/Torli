@@ -1,184 +1,204 @@
 import Link from "next/link";
-import {
-  Calendar,
-  Clock,
-  Sparkles,
-  Smartphone,
-  PhoneCall,
-  MessageCircle,
-  ChevronLeft,
-  Settings,
-} from "lucide-react";
+import { ChevronLeft, MessageCircle, CalendarCheck, Smartphone, Phone } from "lucide-react";
 import { getBusinesses } from "@/lib/db";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 
 export const dynamic = "force-dynamic";
+
+const keyPrimary =
+  "m-key inline-flex items-center justify-center gap-2 h-[52px] px-6 rounded-lg bg-brand-600 text-white font-bold";
+const keySecondary =
+  "m-key2 inline-flex items-center justify-center gap-2 h-[52px] px-6 rounded-lg border border-ink-200 bg-white text-ink-900 font-bold";
 
 export default async function HomePage() {
   const businesses = await getBusinesses();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-indigo-100">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/20">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-extrabold text-base text-slate-900 tracking-tight block leading-tight">
-                ScheduleSaaS
-              </span>
-              <span className="text-[11px] text-slate-500 font-medium">
-                מערכת תורים מותאמת מובייל בעברית
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>כניסה לניהול (Admin)</span>
-            </Link>
-          </div>
+    <div className="min-h-screen bg-paper text-ink-900">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-ink-200 px-4">
+        <div className="max-w-5xl mx-auto h-16 flex items-center justify-between">
+          <Logo sub="תורים בלי טלפונים" />
+          <Link
+            href="/admin"
+            className="m-key2 inline-flex items-center h-11 px-4 rounded-lg border border-ink-200 bg-white text-sm font-bold text-ink-900"
+          >
+            כניסה לבעלי עסקים
+          </Link>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="px-4 pt-8 pb-12 text-center max-w-2xl mx-auto space-y-4">
-        <Badge variant="default" className="px-3 py-1 text-xs">
-          <Sparkles className="w-3.5 h-3.5 ml-1 text-indigo-600" />
-          <span>הלקוחות קובעים לבד, אתה חוזר לעבוד</span>
-        </Badge>
-
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
-          מערכת קביעת וניהול תורים
-          <br />
-          <span className="text-indigo-600 bg-gradient-to-l from-indigo-600 to-violet-600 bg-clip-text text-transparent">
-            למספרות, קליניקות ומכוני יופי
+      {/* Hero */}
+      <section className="max-w-5xl mx-auto px-4 pt-10 pb-12 grid gap-10 md:grid-cols-[1.1fr_1fr] md:items-center">
+        <div className="space-y-5 text-right">
+          <span className="inline-flex items-center gap-1.5 bg-lime text-lime-ink px-2.5 py-1 rounded text-xs font-bold">
+            למספרות, קוסמטיקה וקליניקות
           </span>
-        </h1>
-
-        <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-          ממשק ישראלי מותאם 100% למובייל (`dir="rtl"`), חישוב תורים חכם בזמן אמת, מניעת
-          הזמנות כפולות, זיהוי אוטומטי של לקוחות חוזרים, ולוח ניהול קל לתפעול ביד אחת.
-        </p>
-
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <Link href="/barber-dan">
-            <Button size="lg" className="rounded-2xl shadow-lg shadow-indigo-600/25">
-              <span>הדגמת הזמנת תור (Barber Dan)</span>
-              <ChevronLeft className="w-4 h-4 mr-1" />
-            </Button>
-          </Link>
-          <Link href="/admin">
-            <Button size="lg" variant="outline" className="rounded-2xl">
-              <span>לוח ניהול לבעל העסק</span>
-            </Button>
-          </Link>
-        </div>
-      </section>
-
-      {/* Feature Highlights Grid */}
-      <section className="max-w-4xl mx-auto px-4 pb-12">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-5 space-y-2 border-slate-200">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Smartphone className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-base text-slate-900">100% מותאם מובייל</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              עיצוב נקי עם מגירות תחתיות (Bottom Sheets), יעדי לחיצה נוחים, וחוויית שימוש
-              המרגישה כמו אפליקציה מותקנת ללא צורך בהורדה.
-            </p>
-          </Card>
-
-          <Card className="p-5 space-y-2 border-slate-200">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-base text-slate-900">חישוב זמנים ומניעת כפילויות</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              מחשב תורים לפי שעות הפעילות, משך השירות וזמן המנוחה (Buffer) בין הטיפולים,
-              וחוסם תורים חופפים.
-            </p>
-          </Card>
-
-          <Card className="p-5 space-y-2 border-slate-200">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <MessageCircle className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-base text-slate-900">שילוב וואטסאפ ויומנים</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              הוספה ישירה ליומן Google ו-Apple (.ics), קישור ייעודי לביטול מהיר, ולחצני חיוג
-              ו-WhatsApp מהירים לבעל העסק.
-            </p>
-          </Card>
-        </div>
-      </section>
-
-      {/* Available Demo Businesses */}
-      <section className="max-w-4xl mx-auto px-4 pb-16">
-        <div className="text-right mb-4">
-          <h2 className="text-xl font-bold text-slate-900">עסקים להדגמה במערכת</h2>
-          <p className="text-xs text-slate-500">
-            בחר עסק כדי לחוות את תהליך ההזמנה הציבורי של הלקוח
+          <h1 className="text-[34px] sm:text-5xl font-extrabold leading-[1.1] tracking-tight">
+            הלקוחות קובעים לבד,
+            <br />
+            <span className="text-brand-600">אתה חוזר לעבוד.</span>
+          </h1>
+          <p className="text-base sm:text-lg text-ink-700 leading-relaxed max-w-md">
+            קישור אחד בוואטסאפ ובאינסטגרם. הלקוח בוחר שירות ושעה, מקבל אישור עם קישור לשינוי או
+            ביטול, ואתה רואה הכל ביומן בטלפון.
           </p>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Link href="/admin" className={keyPrimary}>
+              <span>פתיחת יומן לעסק</span>
+              <ChevronLeft className="w-4 h-4 text-lime" />
+            </Link>
+            {businesses[0] && (
+              <Link href={`/${businesses[0].slug}`} className={keySecondary}>
+                איך זה נראה ללקוח
+              </Link>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {businesses.map((b) => (
-            <Card
-              key={b.id}
-              className="p-5 flex flex-col justify-between hover:border-indigo-300 transition-all shadow-soft"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <Badge variant="success">זמין לקביעת תור</Badge>
-                  <span className="text-xs text-slate-400 font-mono">/{b.slug}</span>
-                </div>
-
-                <h3 className="font-extrabold text-lg text-slate-900 mb-1">{b.name}</h3>
-                <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-4">
-                  <PhoneCall className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{b.owner_phone}</span>
-                </p>
+        {/* The ticket: what the owner sees on the phone */}
+        <div className="relative mx-auto w-full max-w-[340px]" aria-hidden="true">
+          <div className="rounded-2xl border border-ink-200 bg-white p-4 space-y-3 shadow-lg">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-extrabold">בוקר טוב, דני</span>
+              <span className="text-ink-500">יום חמישי · 11:20</span>
+            </div>
+            <div className="m-print m-ticket rounded-xl bg-lime text-lime-ink border border-lime-edge flex [--notch:#FFFDF9]">
+              <div className="flex-1 p-4 space-y-0.5">
+                <div className="text-xs font-bold">התור הבא · בעוד 10 דק׳</div>
+                <div className="text-lg font-extrabold">אבי מזרחי</div>
+                <div className="text-sm">תספורת גבר · דני</div>
               </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <Link href={`/${b.slug}`} className="block">
-                  <Button className="w-full text-xs font-bold h-10">
-                    <span>עבור להזמנת תור</span>
-                    <ChevronLeft className="w-3.5 h-3.5 mr-1" />
-                  </Button>
-                </Link>
-
-                <Link href="/admin" className="block">
-                  <Button variant="ghost" className="w-full text-xs text-slate-600 h-9">
-                    <span>פתח ביומן ניהול</span>
-                  </Button>
-                </Link>
+              <div className="px-4 flex flex-col items-center justify-center border-r-2 border-dashed border-lime-ink/25">
+                <span className="text-3xl font-extrabold leading-none">11:30</span>
               </div>
-            </Card>
+            </div>
+            {[
+              ["12:00", "נועה לוי", "תספורת ופן · מיכל", "bg-staff-m"],
+              ["12:15", "רוני כהן", "תספורת וזקן · דני", "bg-staff-d"],
+              ["14:30", "הדס בן דוד", "צבע שורשים · מיכל", "bg-staff-m"],
+            ].map(([t, n, d, c]) => (
+              <div key={t} className="flex items-center gap-3 py-2 border-t border-ink-100">
+                <span className="w-12 font-bold">{t}</span>
+                <span className={`w-[3px] h-8 rounded ${c}`} />
+                <span className="flex-1 leading-tight">
+                  <span className="block font-semibold">{n}</span>
+                  <span className="block text-xs text-ink-600">{d}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="border-y border-ink-200 bg-white">
+        <div className="max-w-5xl mx-auto px-4 py-12 grid gap-8 md:grid-cols-3">
+          {[
+            {
+              icon: Smartphone,
+              title: "שולחים קישור",
+              text: "קישור קבוע לעסק, לביו באינסטגרם, לסטטוס ולמדבקה על הדלת. בלי אפליקציה ללקוח.",
+            },
+            {
+              icon: CalendarCheck,
+              title: "הלקוח קובע לבד",
+              text: "רואה רק שעות פנויות לפי משך השירות, ולא יכול לקבוע על שעה שכבר תפוסה.",
+            },
+            {
+              icon: MessageCircle,
+              title: "אתה רק מאשר",
+              text: "התור נכנס ליומן מיד, עם כפתור וואטסאפ ללקוח. הלקוח יכול לשנות או לבטל עד הזמן שקבעת.",
+            },
+          ].map(({ icon: Icon, title, text }, i) => (
+            <div key={title} className="space-y-2 text-right">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-lg bg-brand-600 text-lime flex items-center justify-center">
+                  <Icon className="w-5 h-5" />
+                </span>
+                <span className="text-xs font-bold text-ink-500">{i + 1}</span>
+              </div>
+              <h2 className="text-lg font-extrabold">{title}</h2>
+              <p className="text-sm text-ink-700 leading-relaxed">{text}</p>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
-        <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span>ScheduleSaaS MVP • פותח עבור עסקים קטנים בישראל</span>
-          <div className="flex items-center gap-4">
-            <Link href="/admin" className="hover:text-indigo-600">
-              ניהול יומן
-            </Link>
+      {/* The message the client gets */}
+      <section className="max-w-5xl mx-auto px-4 py-12 grid gap-8 md:grid-cols-2 md:items-center">
+        <div className="space-y-3 text-right">
+          <h2 className="text-2xl font-extrabold">מה הלקוח מקבל בסוף</h2>
+          <p className="text-ink-700 leading-relaxed">
+            פתק תור ברור: מתי, מה ואיפה. כפתור להוספה ליומן, וקישור לשינוי או ביטול. בלי הרשמה ובלי
+            סיסמה.
+          </p>
+        </div>
+        <div
+          className="m-ticket mx-auto w-full max-w-[340px] rounded-xl border border-ink-200 bg-white p-5 space-y-3 text-sm [--notch:#F4F1E8]"
+          aria-hidden="true"
+        >
+          <div className="border-b border-dashed border-ink-300 pb-3">
+            <div className="text-xs font-semibold text-ink-600">סטודיו דני</div>
+            <div className="text-lg font-extrabold">צבע שורשים</div>
           </div>
+          <div className="flex justify-between">
+            <span className="text-ink-600">תאריך</span>
+            <span className="font-bold">יום ראשון, 11 באוקטובר</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-ink-600">שעה</span>
+            <span className="font-extrabold text-lg bg-lime px-2 rounded">11:00</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ink-600">אצל</span>
+            <span className="font-bold">מיכל</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Demo businesses */}
+      {businesses.length > 0 && (
+        <section className="max-w-5xl mx-auto px-4 pb-16">
+          <div className="text-right mb-4">
+            <h2 className="text-xl font-extrabold">לנסות כמו לקוח</h2>
+            <p className="text-sm text-ink-600">בוחרים עסק וקובעים תור לדוגמה</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {businesses.map((b) => (
+              <Link
+                key={b.id}
+                href={`/${b.slug}`}
+                className="m-press group rounded-xl border border-ink-200 bg-white p-4 flex items-center gap-3 hover:border-brand-400"
+              >
+                <span className="w-11 h-11 rounded-lg bg-brand-600 text-lime text-lg font-extrabold flex items-center justify-center flex-none">
+                  {b.name.trim().charAt(0)}
+                </span>
+                <span className="flex-1 min-w-0 text-right">
+                  <span className="block font-extrabold truncate">{b.name}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-ink-600">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span dir="ltr">{b.owner_phone}</span>
+                  </span>
+                </span>
+                <ChevronLeft className="w-5 h-5 text-ink-400 group-hover:text-brand-600" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Footer */}
+      <footer className="border-t border-ink-200 bg-white py-6 text-sm text-ink-600">
+        <div className="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2">
+            <LogoMark size={20} />
+            <span>Torli · תורים לעסקים קטנים בישראל</span>
+          </span>
+          <Link href="/admin" className="font-semibold text-brand-600 hover:underline">
+            כניסה לבעלי עסקים
+          </Link>
         </div>
       </footer>
     </div>

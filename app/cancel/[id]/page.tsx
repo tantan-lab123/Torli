@@ -8,7 +8,6 @@ import {
   Calendar,
   Clock,
   User,
-  Scissors,
 } from "lucide-react";
 import { Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -185,8 +184,11 @@ export default function CancelAppointmentPage() {
       <div className="max-w-md w-full space-y-5">
         {/* Business Branding */}
         <div className="text-center">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto mb-2 shadow-md shadow-indigo-600/20">
-            <Scissors className="w-6 h-6" />
+          <div
+            aria-hidden="true"
+            className="w-12 h-12 rounded-lg bg-brand-600 text-lime text-xl font-extrabold flex items-center justify-center mx-auto mb-2"
+          >
+            {(appointment.business?.name || "מערכת תורים" || "").trim().charAt(0)}
           </div>
           <h1 className="text-lg font-bold text-slate-900">
             {appointment.business?.name || "מערכת תורים"}
