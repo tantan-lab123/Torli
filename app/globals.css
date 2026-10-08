@@ -49,7 +49,6 @@ body {
   background: var(--background);
   min-height: 100vh;
   min-height: 100dvh;
-  font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   padding-bottom: env(safe-area-inset-bottom, 20px);
