@@ -240,7 +240,13 @@ export default function AdminDashboardPage() {
   const [dayActionModalDate, setDayActionModalDate] = useState<Date | null>(null);
 
   // Private SaaS Login & Registration State
-  const [authTab, setAuthTab] = useState<"login" | "register">("login");
+  // The landing page's sign-up buttons link to /admin?new=1, which opens on registration.
+  // The page shows a loader until the session check ends, so the tab never hydrates.
+  const [authTab, setAuthTab] = useState<"login" | "register">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1"
+      ? "register"
+      : "login"
+  );
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
