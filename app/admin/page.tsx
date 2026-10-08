@@ -223,6 +223,7 @@ export default function AdminDashboardPage() {
     email: string;
     id: string;
     name?: string;
+    accessToken?: string;
   } | null>(null);
 
   // New Business Registration Form
@@ -277,16 +278,11 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const savedSlug = localStorage.getItem(ADMIN_SESSION_KEY);
-      if (!savedSlug) {
-        setIsLoading(false);
-        return;
-      }
-
+      
       try {
-        const res = await fetch(`/api/business?slug=${savedSlug}`);
+        const res = await fetch("/api/auth/session");
         if (res.ok) {
-          const biz = await res.json();
+          const { business: biz } = await res.json();
           setSelectedBusiness(biz);
           setEditingWorkingHours(biz.working_hours);
           setEditingInterval(biz.slot_interval_minutes || 15);
@@ -322,8 +318,7 @@ export default function AdminDashboardPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 provider: "google",
-                email: session.user.email,
-                googleId: session.user.id,
+                access_token: session.access_token,
               }),
             });
 
@@ -340,6 +335,7 @@ export default function AdminDashboardPage() {
               const gUser = {
                 email: session.user.email,
                 id: session.user.id,
+                accessToken: session.access_token,
                 name:
                   (session.user.user_metadata?.full_name as string) ||
                   (session.user.user_metadata?.name as string) ||
@@ -462,6 +458,11 @@ export default function AdminDashboardPage() {
   // Handle Logout
   const handleLogout = async () => {
     sessionStorage.setItem("torli_user_logged_out", "true");
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // ignore
+    }
     if (supabase) {
       try {
         await supabase.auth.signOut();
@@ -547,7 +548,7 @@ export default function AdminDashboardPage() {
           owner_phone: regPhone.trim(),
           owner_email: (googleUser ? googleUser.email : regEmail.trim()) || undefined,
           password: googleUser ? undefined : regPassword.trim(),
-          google_id: googleUser ? googleUser.id : undefined,
+          access_token: googleUser ? googleUser.accessToken : undefined,
           slot_interval_minutes: Number(regInterval),
           category: regCategory,
         }),
@@ -1002,7 +1003,7 @@ export default function AdminDashboardPage() {
     triggerHaptic(30);
 
     try {
-      const res = await fetch("/api/cron/reminders?secret=schedule-cron-secret-key-123");
+      const res = await fetch("/api/cron/reminders", { method: "POST" });
       const data = await res.json();
       setReminderResult(data);
       fetchAppointments();

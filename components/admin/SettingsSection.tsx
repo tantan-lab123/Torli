@@ -775,7 +775,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
         {/* TAB 4: GOOGLE CALENDAR & APPLE CALENDAR LIVE SYNC */}
         {subTab === "sync" && (() => {
           const origin = typeof window !== "undefined" ? window.location.origin : "https://torli-eight.vercel.app";
-          const syncFeedUrl = `${origin}/api/calendar/${business.slug}`;
+          const syncFeedUrl = `${origin}/api/calendar/${business.slug}?t=${business.calendar_token ?? ""}`;
 
           const handleCopySync = async () => {
             triggerHaptic(20);

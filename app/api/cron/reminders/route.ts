@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPendingReminders, markReminderSent } from "@/lib/db";
 import { formatHebrewDate, formatTime } from "@/lib/utils";
+import { getSessionBusinessId, unauthorized, verifyBearer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,47 +14,33 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleReminders(request: NextRequest) {
-  // Secret token authentication
-  const authHeader = request.headers.get("authorization");
-  const urlToken = request.nextUrl.searchParams.get("token") || request.nextUrl.searchParams.get("secret");
-
-  const expectedSecret = process.env.CRON_SECRET || "schedule-cron-secret-key-123";
-
-  const isAuthorized =
-    authHeader === `Bearer ${expectedSecret}` ||
-    urlToken === expectedSecret ||
-    process.env.NODE_ENV === "development"; // allow easy preview in dev
-
-  if (!isAuthorized) {
-    return NextResponse.json(
-      { error: "Unauthorized: Invalid or missing bearer token" },
-      { status: 401 }
-    );
-  }
+  // Scheduler: Authorization: Bearer <CRON_SECRET> (secret is never accepted in the URL
+  // and there is no built-in default). Vercel Cron sends this header automatically.
+  // A logged-in owner may run the check for their OWN business only.
+  const isCron = verifyBearer(request, process.env.CRON_SECRET);
+  const ownerId = isCron ? null : getSessionBusinessId(request);
+  if (!isCron && !ownerId) return unauthorized();
 
   try {
-    // Query appointments starting between 24 and 25 hours from now with reminder_sent = false
-    const pendingAppointments = await getPendingReminders(24, 25);
+    const all = await getPendingReminders(24, 25);
+    const pendingAppointments = ownerId ? all.filter((a) => a.business_id === ownerId) : all;
 
+    let processed = 0;
     const results = [];
 
     for (const app of pendingAppointments) {
       const client = app.client;
-      const service = app.service;
-      const business = app.business;
-
       if (!client || !client.phone) continue;
 
       const dateText = formatHebrewDate(app.start_time);
       const timeText = formatTime(app.start_time);
-      const businessName = business?.name || "בית העסק";
-      const serviceName = service?.name || "טיפול";
+      const businessName = app.business?.name || "בית העסק";
+      const serviceName = app.service?.name || "טיפול";
 
       const baseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://schedule.app");
 
-      // Formulate WhatsApp message in Hebrew
       const message =
         `היי ${client.first_name}! 🌟\n` +
         `תזכורת לתור שלך ל${serviceName} ב${businessName}.\n` +
@@ -61,37 +48,31 @@ async function handleReminders(request: NextRequest) {
         `לביטול או שינוי: ${baseUrl}/cancel/${app.id}\n` +
         `נשמח לראותך!`;
 
-      // Log simulated WhatsApp gateway payload
-      console.log("==================================================");
-      console.log("SENDING REMINDER TO:", client.phone);
-      console.log("CLIENT NAME:", `${client.first_name} ${client.last_name}`);
-      console.log("MESSAGE:\n" + message);
-      console.log("==================================================");
-
-      // Mark reminder as sent
+      // TODO: hand `message` to the real WhatsApp/SMS gateway. Nothing personal is logged here.
       await markReminderSent(app.id);
+      processed += 1;
 
-      results.push({
-        appointment_id: app.id,
-        phone: client.phone,
-        client_name: `${client.first_name} ${client.last_name}`,
-        service: serviceName,
-        start_time: app.start_time,
-        message,
-      });
+      // Only the owner-triggered manual run echoes details back (their own clients).
+      if (ownerId) {
+        results.push({
+          appointment_id: app.id,
+          phone: client.phone,
+          client_name: `${client.first_name} ${client.last_name}`,
+          service: serviceName,
+          start_time: app.start_time,
+          message,
+        });
+      }
     }
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      processed_count: results.length,
-      reminders_sent: results,
+      processed_count: processed,
+      ...(ownerId ? { reminders_sent: results } : {}),
     });
   } catch (error) {
     console.error("Error running reminder cron:", error);
-    return NextResponse.json(
-      { error: "Internal server error running reminder cron" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error running reminder cron" }, { status: 500 });
   }
 }

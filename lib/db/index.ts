@@ -12,7 +12,8 @@ import {
   INITIAL_CLIENTS,
   createInitialAppointments,
 } from "./mock-data";
-import { isSupabaseConfigured, supabaseAdmin, supabase } from "./supabase";
+import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
+import { hashPassword } from "@/lib/auth";
 
 // In-Memory store for development / preview when Supabase is not connected
 declare global {
@@ -28,12 +29,15 @@ declare global {
 }
 
 if (!globalThis.__SCHEDULE_DB__) {
-  globalThis.__SCHEDULE_DB__ = {
-    businesses: [...INITIAL_BUSINESSES],
-    services: [...INITIAL_SERVICES],
-    clients: [...INITIAL_CLIENTS],
-    appointments: createInitialAppointments(),
-  };
+  const useMock = !isSupabaseConfigured && process.env.NODE_ENV !== "production";
+  globalThis.__SCHEDULE_DB__ = useMock
+    ? {
+        businesses: [...INITIAL_BUSINESSES],
+        services: [...INITIAL_SERVICES],
+        clients: [...INITIAL_CLIENTS],
+        appointments: createInitialAppointments(),
+      }
+    : { businesses: [], services: [], clients: [], appointments: [] };
 }
 
 const db = globalThis.__SCHEDULE_DB__;
@@ -82,129 +86,108 @@ export function normalizeBusinessRecord(raw: any): Business {
 }
 
 export async function getBusinesses(): Promise<Business[]> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client.from("businesses").select("*");
-    if (!error && data) return data.map(normalizeBusinessRecord);
+    if (error) throw error;
+    if (data) return data.map(normalizeBusinessRecord);
   }
   return db.businesses.map(normalizeBusinessRecord);
 }
 
 export async function getBusinessBySlug(slug: string): Promise<Business | null> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("businesses")
       .select("*")
       .eq("slug", slug)
-      .single();
-    if (!error && data) return normalizeBusinessRecord(data);
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return normalizeBusinessRecord(data);
   }
   const found = db.businesses.find((b) => b.slug === slug);
   return found ? normalizeBusinessRecord(found) : null;
 }
 
 export async function getBusinessById(id: string): Promise<Business | null> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("businesses")
       .select("*")
       .eq("id", id)
-      .single();
-    if (!error && data) return normalizeBusinessRecord(data);
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return normalizeBusinessRecord(data);
   }
   const found = db.businesses.find((b) => b.id === id);
   return found ? normalizeBusinessRecord(found) : null;
 }
 
-export async function loginBusiness(
-  phoneOrCredentials:
-    | string
-    | {
-        phone?: string;
-        password?: string;
-        pinOrPassword?: string;
-        googleId?: string;
-        email?: string;
-      },
-  legacyParam?: string
-): Promise<Business | null> {
-  const phone =
-    typeof phoneOrCredentials === "string"
-      ? phoneOrCredentials
-      : phoneOrCredentials.phone;
-  const password =
-    typeof phoneOrCredentials === "string"
-      ? legacyParam
-      : phoneOrCredentials.password || phoneOrCredentials.pinOrPassword;
-  const googleId =
-    typeof phoneOrCredentials === "object"
-      ? phoneOrCredentials.googleId
-      : undefined;
-  const email =
-    typeof phoneOrCredentials === "object"
-      ? phoneOrCredentials.email
-      : undefined;
+const escapeLike = (v: string) =>
+  v.split("\\").join("\\\\").split("%").join("\\%").split("_").join("\\_");
 
-  // Handle Google Login
-  if (googleId || email) {
-    if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase!;
-      if (email) {
-        const { data } = await client
-          .from("businesses")
-          .select("*")
-          .ilike("owner_email", email.trim())
-          .maybeSingle();
-        if (data) return normalizeBusinessRecord(data);
-      }
-      if (googleId) {
-        const { data } = await client
-          .from("businesses")
-          .select("*")
-          .eq("google_id", googleId)
-          .maybeSingle();
-        if (data) return normalizeBusinessRecord(data);
-      }
-    }
-
-    const foundByGoogle = db.businesses.find(
-      (b) =>
-        (googleId && b.google_id === googleId) ||
-        (email && b.owner_email?.toLowerCase() === email.toLowerCase())
-    );
-    if (foundByGoogle) return normalizeBusinessRecord(foundByGoogle);
-  }
-
-  if (!phone || !password) return null;
-  const normalizedPhone = phone.replace(/\D/g, "");
-
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
-    const { data, error } = await client
+export async function getBusinessByPhone(phone: string): Promise<Business | null> {
+  const normalized = phone.replace(/[^0-9]/g, "");
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
       .from("businesses")
       .select("*")
-      .eq("owner_phone", normalizedPhone)
+      .eq("owner_phone", normalized)
+      .limit(1)
       .maybeSingle();
-    if (!error && data) {
-      // ONLY password allowed (PIN is canceled)
-      if (data.password && data.password === password) {
-        return normalizeBusinessRecord(data);
-      }
-    }
+    if (error) throw error;
+    return data ? normalizeBusinessRecord(data) : null;
   }
+  const found = db.businesses.find((b) => b.owner_phone.replace(/[^0-9]/g, "") === normalized);
+  return found ? normalizeBusinessRecord(found) : null;
+}
 
+/** Login by an identity ALREADY VERIFIED by the caller (Google token check). */
+export async function findBusinessByVerifiedGoogle(
+  email: string,
+  googleId: string
+): Promise<Business | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const byId = await supabaseAdmin
+      .from("businesses")
+      .select("*")
+      .eq("google_id", googleId)
+      .limit(1)
+      .maybeSingle();
+    if (byId.error) throw byId.error;
+    if (byId.data) return normalizeBusinessRecord(byId.data);
+
+    const byEmail = await supabaseAdmin
+      .from("businesses")
+      .select("*")
+      .ilike("owner_email", escapeLike(email.trim()))
+      .limit(1)
+      .maybeSingle();
+    if (byEmail.error) throw byEmail.error;
+    if (byEmail.data) return normalizeBusinessRecord(byEmail.data);
+    return null;
+  }
   const found = db.businesses.find(
-    (b) => b.owner_phone.replace(/\D/g, "") === normalizedPhone
+    (b) => b.google_id === googleId || b.owner_email?.toLowerCase() === email.toLowerCase()
   );
+  return found ? normalizeBusinessRecord(found) : null;
+}
 
-  if (found) {
-    if (found.password && found.password === password) {
-      return normalizeBusinessRecord(found);
-    }
+/** Phone + password login. Returns the business (incl. hash) so the caller can verify. */
+export async function getBusinessForLogin(phone: string): Promise<Business | null> {
+  return getBusinessByPhone(phone);
+}
+
+export async function setBusinessPasswordHash(id: string, hash: string): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("businesses").update({ password: hash }).eq("id", id);
+    if (error) throw error;
+    return;
   }
-  return null;
+  const idx = db.businesses.findIndex((b) => b.id === id);
+  if (idx !== -1) db.businesses[idx].password = hash;
 }
 
 export async function updateBusiness(
@@ -235,14 +218,12 @@ export async function updateBusiness(
     working_hours: nextWh,
   };
   if (updates.name !== undefined) payload.name = updates.name;
-  if (updates.owner_phone !== undefined) payload.owner_phone = updates.owner_phone;
+  if (updates.owner_phone !== undefined) payload.owner_phone = updates.owner_phone.replace(/[^0-9]/g, "");
   if (updates.owner_email !== undefined) payload.owner_email = updates.owner_email;
-  if (updates.password !== undefined) payload.password = updates.password;
-  if (updates.google_id !== undefined) payload.google_id = updates.google_id;
-  if (updates.pin !== undefined) payload.pin = updates.pin;
+  if (updates.password !== undefined) payload.password = hashPassword(updates.password);
 
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("businesses")
       .update(payload)
@@ -252,9 +233,8 @@ export async function updateBusiness(
     if (!error && data) {
       return normalizeBusinessRecord(data);
     }
-    if (error) {
-      console.error("Supabase updateBusiness error:", error);
-    }
+    if (error) throw error;
+    return null;
   }
 
   const idx = db.businesses.findIndex((b) => b.id === id);
@@ -262,6 +242,7 @@ export async function updateBusiness(
     db.businesses[idx] = {
       ...db.businesses[idx],
       ...updates,
+      password: payload.password ?? db.businesses[idx].password,
       working_hours: nextWh as any,
       settings: updates.settings || db.businesses[idx].settings,
     };
@@ -302,19 +283,18 @@ export async function createBusiness(input: {
     id: "b-" + Math.random().toString(36).substring(2, 9),
     name: input.name.trim(),
     slug: normalizedSlug,
-    owner_phone: input.owner_phone.trim(),
+    owner_phone: input.owner_phone.replace(/[^0-9]/g, ""),
     owner_email: input.owner_email?.trim(),
-    password: input.password,
+    password: input.password ? hashPassword(input.password) : undefined,
     google_id: input.google_id,
-    pin: input.pin || "1234",
     slot_interval_minutes: input.slot_interval_minutes || 15,
     date_overrides: [],
     working_hours: defaultHours,
     created_at: new Date().toISOString(),
   };
 
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("businesses")
       .insert({
@@ -328,14 +308,11 @@ export async function createBusiness(input: {
       })
       .select()
       .single();
-    if (!error && data) {
-      newBusiness.id = data.id;
-    } else if (error) {
-      console.error("Error creating business in Supabase:", error);
-    }
+    if (error) throw error;
+    newBusiness.id = data.id;
+  } else {
+    db.businesses.push(newBusiness);
   }
-
-  db.businesses.push(newBusiness);
 
   // Seed default starter services according to category
   const cat = input.category || "barber";
@@ -375,15 +352,14 @@ export async function createBusiness(input: {
 }
 
 export async function deleteBusiness(id: string): Promise<boolean> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     // Delete associated appointments and services
     await client.from("appointments").delete().eq("business_id", id);
     await client.from("services").delete().eq("business_id", id);
     const { error } = await client.from("businesses").delete().eq("id", id);
-    if (error) {
-      console.error("Supabase deleteBusiness error:", error);
-    }
+    if (error) throw error;
+    return true;
   }
 
   db.appointments = db.appointments.filter((a) => a.business_id !== id);
@@ -397,13 +373,14 @@ export async function deleteBusiness(id: string): Promise<boolean> {
 // ==============================================================================
 
 export async function getServices(businessId: string): Promise<Service[]> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin!
       .from("services")
       .select("*")
       .eq("business_id", businessId)
       .order("price", { ascending: true });
-    if (!error && data) return data as Service[];
+    if (error) throw error;
+    if (data) return data as Service[];
   }
   return db.services.filter((s) => s.business_id === businessId);
 }
@@ -411,14 +388,15 @@ export async function getServices(businessId: string): Promise<Service[]> {
 export async function createService(
   serviceData: Omit<Service, "id" | "created_at">
 ): Promise<Service> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("services")
       .insert(serviceData)
       .select()
-      .single();
-    if (!error && data) return data as Service;
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Service;
   }
 
   const newService: Service = {
@@ -434,15 +412,16 @@ export async function updateService(
   id: string,
   updates: Partial<Omit<Service, "id" | "business_id">>
 ): Promise<Service | null> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("services")
       .update(updates)
       .eq("id", id)
       .select()
-      .single();
-    if (!error && data) return data as Service;
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Service;
   }
 
   const idx = db.services.findIndex((s) => s.id === id);
@@ -453,9 +432,22 @@ export async function updateService(
   return null;
 }
 
+export async function getServiceById(id: string): Promise<Service | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("services")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as Service) || null;
+  }
+  return db.services.find((s) => s.id === id) || null;
+}
+
 export async function deleteService(id: string): Promise<boolean> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { error } = await client.from("services").delete().eq("id", id);
     if (!error) return true;
   }
@@ -473,12 +465,13 @@ export async function deleteService(id: string): Promise<boolean> {
 // ==============================================================================
 
 export async function getClients(businessId: string): Promise<Client[]> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin!
       .from("clients")
       .select("*")
       .eq("business_id", businessId);
-    if (!error && data) return data as Client[];
+    if (error) throw error;
+    if (data) return data as Client[];
   }
   return db.clients.filter((c) => c.business_id === businessId);
 }
@@ -488,14 +481,15 @@ export async function findClientByPhone(
   phone: string
 ): Promise<Client | null> {
   const normalized = phone.replace(/\D/g, "");
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin!
       .from("clients")
       .select("*")
       .eq("business_id", businessId)
       .eq("phone", normalized)
       .maybeSingle();
-    if (!error && data) return data as Client;
+    if (error) throw error;
+    if (data) return data as Client;
   }
 
   return (
@@ -522,38 +516,23 @@ export async function findOrCreateClient(
 
   const existing = await findClientByPhone(businessId, normalizedPhone);
   if (existing) {
-    // Update name or auth info if changed
-    if (
-      existing.first_name !== clientData.first_name ||
-      existing.last_name !== clientData.last_name ||
-      clientData.email ||
-      clientData.google_id
-    ) {
-      if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-        const client = supabaseAdmin || supabase!;
-        await client
+    // Never let an anonymous booking overwrite stored client details; only fill a missing email.
+    if (clientData.email && !existing.email) {
+      if (isSupabaseConfigured && supabaseAdmin) {
+        const { error } = await supabaseAdmin
           .from("clients")
-          .update({
-            first_name: clientData.first_name,
-            last_name: clientData.last_name,
-            email: clientData.email || existing.email,
-            google_id: clientData.google_id || existing.google_id,
-            auth_provider: clientData.auth_provider || existing.auth_provider,
-          })
+          .update({ email: clientData.email })
           .eq("id", existing.id);
+        if (error) throw error;
       }
-      existing.first_name = clientData.first_name;
-      existing.last_name = clientData.last_name;
-      if (clientData.email) existing.email = clientData.email;
-      if (clientData.google_id) existing.google_id = clientData.google_id;
-      if (clientData.auth_provider) existing.auth_provider = clientData.auth_provider;
+      existing.email = clientData.email;
     }
     return existing;
   }
 
   // Create new client
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("clients")
       .insert({
@@ -566,8 +545,9 @@ export async function findOrCreateClient(
         auth_provider: clientData.auth_provider || 'guest',
       })
       .select()
-      .single();
-    if (!error && data) return data as Client;
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Client;
   }
 
   const newClient: Client = {
@@ -594,17 +574,18 @@ export async function getAppointments(
   startDate?: string,
   endDate?: string
 ): Promise<Appointment[]> {
-  if (isSupabaseConfigured && supabase) {
-    let query = supabase
+  if (isSupabaseConfigured && supabaseAdmin) {
+    let query = supabaseAdmin!
       .from("appointments")
-      .select("*, service:services(*), client:clients(*), business:businesses(*)")
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
       .eq("business_id", businessId);
 
     if (startDate) query = query.gte("start_time", startDate);
     if (endDate) query = query.lte("end_time", endDate);
 
     const { data, error } = await query.order("start_time", { ascending: true });
-    if (!error && data) return data as Appointment[];
+    if (error) throw error;
+    if (data) return data as Appointment[];
   }
 
   let apps = db.appointments.filter((a) => a.business_id === businessId);
@@ -628,13 +609,14 @@ export async function getAppointments(
 export async function getAppointmentById(
   id: string
 ): Promise<Appointment | null> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin!
       .from("appointments")
-      .select("*, service:services(*), client:clients(*), business:businesses(*)")
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
       .eq("id", id)
-      .single();
-    if (!error && data) return data as Appointment;
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Appointment;
   }
 
   const app = db.appointments.find((a) => a.id === id);
@@ -650,8 +632,8 @@ export async function createAppointment(appointmentData: {
   end_time: string;
   notes?: string | null;
 }): Promise<Appointment> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("appointments")
       .insert({
@@ -664,9 +646,10 @@ export async function createAppointment(appointmentData: {
         reminder_sent: false,
         notes: appointmentData.notes || null,
       })
-      .select("*, service:services(*), client:clients(*), business:businesses(*)")
-      .single();
-    if (!error && data) return data as Appointment;
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Appointment;
   }
 
   const newApp: Appointment = {
@@ -690,15 +673,16 @@ export async function updateAppointmentStatus(
   id: string,
   status: AppointmentStatus
 ): Promise<Appointment | null> {
-  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
-    const client = supabaseAdmin || supabase!;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const client = supabaseAdmin!;
     const { data, error } = await client
       .from("appointments")
       .update({ status })
       .eq("id", id)
-      .select("*, service:services(*), client:clients(*), business:businesses(*)")
-      .single();
-    if (!error && data) return data as Appointment;
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as Appointment;
   }
 
   const idx = db.appointments.findIndex((a) => a.id === id);
@@ -735,7 +719,7 @@ export async function blockTimeSlot({
 
   return createAppointment({
     business_id,
-    service_id: db.services.find((s) => s.business_id === business_id)?.id || "",
+    service_id: null as unknown as string,
     client_id: blockClient.id,
     start_time,
     end_time,
@@ -758,13 +742,14 @@ export async function getPendingReminders(
   if (isSupabaseConfigured && supabaseAdmin) {
     const { data, error } = await supabaseAdmin
       .from("appointments")
-      .select("*, service:services(*), client:clients(*), business:businesses(*)")
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
       .eq("status", "confirmed")
       .eq("reminder_sent", false)
       .gte("start_time", windowStart)
       .lte("start_time", windowEnd);
 
-    if (!error && data) return data as Appointment[];
+    if (error) throw error;
+    if (data) return data as Appointment[];
   }
 
   const pending = db.appointments.filter((a) => {

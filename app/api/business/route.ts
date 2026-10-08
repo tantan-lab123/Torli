@@ -1,36 +1,61 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBusinesses, getBusinessBySlug, getBusinessById, updateBusiness } from "@/lib/db";
+import {
+  getBusinessBySlug,
+  getBusinessByPhone,
+  getBusinessById,
+  updateBusiness,
+  createBusiness,
+  deleteBusiness,
+} from "@/lib/db";
 import { validatePassword, generateRandomSlug } from "@/lib/utils";
+import {
+  forbidden,
+  getSessionBusinessId,
+  setSessionCookie,
+  clearSessionCookie,
+  toOwnerBusiness,
+  toPublicBusiness,
+  unauthorized,
+  verifyGoogleAccessToken,
+} from "@/lib/auth";
+import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
+const PASSWORD_ERROR =
+  "הסיסמה חייבת להכיל לפחות 8 תווים, אות גדולה, אות קטנה, ספרה ותו מיוחד (!@#$%^&* וכו')";
+
+/** Public: a single business by slug or id, without any private fields. */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const slug = searchParams.get("slug");
   const id = searchParams.get("id");
 
-  if (slug) {
-    const business = await getBusinessBySlug(slug);
-    if (!business) {
-      return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
-    }
-    return NextResponse.json(business);
+  const business = slug
+    ? await getBusinessBySlug(slug)
+    : id
+    ? await getBusinessById(id)
+    : null;
+
+  if (!slug && !id) {
+    return NextResponse.json({ error: "slug or id is required" }, { status: 400 });
+  }
+  if (!business) {
+    return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
   }
 
-  if (id) {
-    const business = await getBusinessById(id);
-    if (!business) {
-      return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
-    }
-    return NextResponse.json(business);
+  // The logged-in owner gets their own full view (incl. calendar token).
+  if (getSessionBusinessId(request) === business.id) {
+    return NextResponse.json(toOwnerBusiness(business));
   }
-
-  const businesses = await getBusinesses();
-  return NextResponse.json(businesses);
+  return NextResponse.json(toPublicBusiness(business));
 }
 
 export async function PATCH(request: NextRequest) {
   try {
+    const sessionId = getSessionBusinessId(request);
+    if (!sessionId) return unauthorized();
+
     const body = await request.json();
     const {
       id,
@@ -38,115 +63,119 @@ export async function PATCH(request: NextRequest) {
       owner_phone,
       owner_email,
       password,
-      google_id,
       working_hours,
       slot_interval_minutes,
       date_overrides,
       settings,
-      pin,
     } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: "חסר מזהה עסק" }, { status: 400 });
-    }
+    // An owner may only modify their own business.
+    if (id && id !== sessionId) return forbidden();
+    const businessId = sessionId;
 
-    if (password) {
-      const check = validatePassword(password);
-      if (!check.isValid) {
-        return NextResponse.json(
-          {
-            error:
-              "הסיסמה חייבת להכיל לפחות 8 תווים, אות גדולה, אות קטנה, ספרה ותו מיוחד (!@#$%^&* וכו')",
-          },
-          { status: 400 }
-        );
+    if (password !== undefined) {
+      if (typeof password !== "string" || !validatePassword(password).isValid) {
+        return NextResponse.json({ error: PASSWORD_ERROR }, { status: 400 });
       }
     }
+    if (name !== undefined && (typeof name !== "string" || name.trim().length < 1 || name.length > 120)) {
+      return NextResponse.json({ error: "שם עסק לא תקין" }, { status: 400 });
+    }
+    if (owner_phone !== undefined) {
+      const digits = String(owner_phone).replace(/\D/g, "");
+      if (digits.length !== 10 || !digits.startsWith("0")) {
+        return NextResponse.json({ error: "מספר טלפון לא תקין" }, { status: 400 });
+      }
+      const taken = await getBusinessByPhone(digits);
+      if (taken && taken.id !== businessId) {
+        return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
+      }
+    }
+    if (
+      slot_interval_minutes !== undefined &&
+      ![5, 10, 15, 20, 30, 45, 60, 90, 120].includes(Number(slot_interval_minutes))
+    ) {
+      return NextResponse.json({ error: "מרווח זמן לא תקין" }, { status: 400 });
+    }
+    if (settings !== undefined && (typeof settings !== "object" || settings === null)) {
+      return NextResponse.json({ error: "הגדרות לא תקינות" }, { status: 400 });
+    }
+    // Size guard for client-controlled JSON (logo / cover are data URLs).
+    if (JSON.stringify(settings ?? {}).length > 3_000_000 || JSON.stringify(working_hours ?? {}).length > 50_000) {
+      return NextResponse.json({ error: "הנתונים גדולים מדי" }, { status: 413 });
+    }
 
-    const updated = await updateBusiness(id, {
-      ...(name ? { name } : {}),
+    const updated = await updateBusiness(businessId, {
+      ...(name ? { name: name.trim() } : {}),
       ...(owner_phone ? { owner_phone } : {}),
-      ...(owner_email ? { owner_email } : {}),
+      ...(owner_email ? { owner_email: String(owner_email).trim().slice(0, 254) } : {}),
       ...(password ? { password } : {}),
-      ...(google_id ? { google_id } : {}),
       ...(working_hours ? { working_hours } : {}),
       ...(slot_interval_minutes !== undefined
         ? { slot_interval_minutes: Number(slot_interval_minutes) }
         : {}),
       ...(date_overrides !== undefined ? { date_overrides } : {}),
       ...(settings !== undefined ? { settings } : {}),
-      ...(pin ? { pin } : {}),
     });
 
     if (!updated) {
       return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
     }
-
-    return NextResponse.json(updated);
+    return NextResponse.json(toOwnerBusiness(updated));
   } catch (error) {
     console.error("Error updating business:", error);
-    return NextResponse.json(
-      { error: "שגיאה בעדכון פרטי העסק" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "שגיאה בעדכון פרטי העסק" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    if (!rateLimit(`register:${clientIp(request)}`, 5, 60 * 60 * 1000)) return tooMany();
+
     const body = await request.json();
-    const {
-      name,
-      slug,
-      owner_phone,
-      owner_email,
-      password,
-      google_id,
-      category,
-      slot_interval_minutes,
-    } = body;
+    const { name, slug, owner_phone, owner_email, password, access_token, category, slot_interval_minutes } =
+      body;
 
-    let finalSlug = typeof slug === "string" ? slug.trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-    if (!finalSlug) {
-      finalSlug = generateRandomSlug(6);
+    if (typeof name !== "string" || !name.trim() || name.length > 120 || !owner_phone) {
+      return NextResponse.json({ error: "יש למלא שם עסק ומספר טלפון" }, { status: 400 });
+    }
+    const phoneDigits = String(owner_phone).replace(/\D/g, "");
+    if (phoneDigits.length !== 10 || !phoneDigits.startsWith("0")) {
+      return NextResponse.json({ error: "מספר טלפון לא תקין" }, { status: 400 });
     }
 
-    if (!name || !owner_phone) {
-      return NextResponse.json(
-        { error: "יש למלא שם עסק ומספר טלפון" },
-        { status: 400 }
-      );
-    }
-
-    // Enforce password if not signing up via Google
-    if (!password && !google_id) {
-      return NextResponse.json(
-        { error: "יש להגדיר סיסמה מאובטחת או להתחבר באמצעות חשבון Google" },
-        { status: 400 }
-      );
-    }
-
-    // If password provided, ensure it satisfies strong password policy
-    if (password) {
-      const check = validatePassword(password);
-      if (!check.isValid) {
+    // Google registration: the identity must be proven with a valid Supabase token.
+    let googleIdentity: { email: string; id: string } | null = null;
+    if (access_token) {
+      googleIdentity = await verifyGoogleAccessToken(access_token);
+      if (!googleIdentity) {
+        return NextResponse.json({ error: "אימות Google נכשל" }, { status: 401 });
+      }
+    } else {
+      if (typeof password !== "string" || !password) {
         return NextResponse.json(
-          {
-            error:
-              "הסיסמה אינה עומדת בדרישות האבטחה: לפחות 8 תווים, אות גדולה, אות קטנה, ספרה ותו מיוחד",
-          },
+          { error: "יש להגדיר סיסמה מאובטחת או להתחבר באמצעות חשבון Google" },
           { status: 400 }
         );
       }
+      if (!validatePassword(password).isValid) {
+        return NextResponse.json({ error: PASSWORD_ERROR }, { status: 400 });
+      }
     }
 
-    // Check if slug already exists; if randomly generated and collision, re-roll once
+    if (await getBusinessByPhone(phoneDigits)) {
+      return NextResponse.json({ error: "מספר הטלפון כבר רשום במערכת" }, { status: 409 });
+    }
+
+    let finalSlug =
+      typeof slug === "string" ? slug.trim().toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40) : "";
+    if (!finalSlug) finalSlug = generateRandomSlug(6);
+
     let existing = await getBusinessBySlug(finalSlug);
     if (existing && !slug) {
       finalSlug = generateRandomSlug(6);
       existing = await getBusinessBySlug(finalSlug);
     }
-
     if (existing) {
       return NextResponse.json(
         { error: "מזהה קישור (Slug) זה כבר תפוס במערכת. אנא בחר סיומת אחרת." },
@@ -154,63 +183,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { createBusiness } = await import("@/lib/db");
     const newBusiness = await createBusiness({
       name,
       slug: finalSlug,
-      owner_phone,
-      owner_email,
-      password,
-      google_id,
+      owner_phone: phoneDigits,
+      owner_email: googleIdentity ? googleIdentity.email : owner_email,
+      password: googleIdentity ? undefined : password,
+      google_id: googleIdentity?.id,
       category,
-      slot_interval_minutes: slot_interval_minutes
-        ? Number(slot_interval_minutes)
-        : undefined,
+      slot_interval_minutes: slot_interval_minutes ? Number(slot_interval_minutes) : undefined,
     });
 
-    return NextResponse.json({ success: true, business: newBusiness });
+    const res = NextResponse.json({ success: true, business: toOwnerBusiness(newBusiness) });
+    setSessionCookie(res, newBusiness.id);
+    return res;
   } catch (error) {
     console.error("Error creating business:", error);
-    return NextResponse.json(
-      { error: "שגיאה ביצירת עסק חדש" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "שגיאה ביצירת עסק חדש" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl;
-    let id = searchParams.get("id");
+    const sessionId = getSessionBusinessId(request);
+    if (!sessionId) return unauthorized();
 
-    if (!id) {
-      try {
-        const body = await request.json();
-        id = body?.id;
-      } catch {
-        // ignore
-      }
-    }
+    const id = request.nextUrl.searchParams.get("id");
+    if (id && id !== sessionId) return forbidden();
 
-    if (!id) {
-      return NextResponse.json(
-        { error: "חסר מזהה עסק למחיקה" },
-        { status: 400 }
-      );
-    }
+    await deleteBusiness(sessionId);
 
-    const { deleteBusiness } = await import("@/lib/db");
-    await deleteBusiness(id);
-
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       message: "העסק וכל הנתונים המקושרים אליו נמחקו לצמיתות בהצלחה",
     });
+    clearSessionCookie(res);
+    return res;
   } catch (error) {
     console.error("Error deleting business:", error);
-    return NextResponse.json(
-      { error: "שגיאה במחיקת העסק מהמערכת" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "שגיאה במחיקת העסק מהמערכת" }, { status: 500 });
   }
 }

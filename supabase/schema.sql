@@ -12,9 +12,8 @@ create table if not exists public.businesses (
     name text not null,
     owner_phone text not null,
     owner_email text,
-    password text,
+    password text, -- bcrypt hash (never plaintext)
     google_id text,
-    pin text default '1234',
     working_hours jsonb not null default '{
         "sunday":    { "open": "09:00", "close": "19:00", "active": true, "lunch_break": { "active": true, "start": "13:00", "end": "14:00" } },
         "monday":    { "open": "09:00", "close": "19:00", "active": true, "lunch_break": { "active": true, "start": "13:00", "end": "14:00" } },
@@ -80,48 +79,26 @@ create table if not exists public.appointments (
 create index if not exists idx_appointments_business_dates on public.appointments (business_id, start_time, end_time);
 create index if not exists idx_appointments_reminders on public.appointments (reminder_sent, start_time) where status = 'confirmed';
 
+-- Prevent double-booking at the database level (half-open ranges)
+create extension if not exists btree_gist with schema extensions;
+alter table public.appointments
+    add constraint appointments_no_overlap
+    exclude using gist (business_id with =, tstzrange(start_time, end_time, '[)') with &&)
+    where (status = 'confirmed');
+
 -- ==============================================================================
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- ROW LEVEL SECURITY: deny-all for browser roles.
+-- The application only talks to the database from the server with the
+-- service_role key (which bypasses RLS). The public anon key must never be
+-- able to read or write these tables.
 -- ==============================================================================
 alter table public.businesses enable row level security;
 alter table public.services enable row level security;
 alter table public.clients enable row level security;
 alter table public.appointments enable row level security;
 
--- Public read access for businesses & services (needed for public booking)
-create policy "Allow public read for businesses" on public.businesses
-    for select using (true);
-
-create policy "Allow public read for services" on public.services
-    for select using (true);
-
--- Public can search clients by phone or insert a new client
-create policy "Allow public select on clients for phone lookup" on public.clients
-    for select using (true);
-
-create policy "Allow public insert on clients" on public.clients
-    for insert with check (true);
-
--- Public can view appointments to detect collisions & insert new booking
-create policy "Allow public select on appointments for slot availability" on public.appointments
-    for select using (true);
-
-create policy "Allow public insert on appointments" on public.appointments
-    for insert with check (true);
-
--- Public can update appointment status (for cancellation link)
-create policy "Allow cancellation by appointment id" on public.appointments
-    for update using (true) with check (status in ('confirmed', 'cancelled'));
-
--- Full admin access via service role
-create policy "Allow service_role full access to businesses" on public.businesses
-    for all using (auth.role() = 'service_role');
-create policy "Allow service_role full access to services" on public.services
-    for all using (auth.role() = 'service_role');
-create policy "Allow service_role full access to clients" on public.clients
-    for all using (auth.role() = 'service_role');
-create policy "Allow service_role full access to appointments" on public.appointments
-    for all using (auth.role() = 'service_role');
+revoke all on public.businesses, public.services, public.clients, public.appointments
+    from anon, authenticated;
 
 -- ==============================================================================
 -- SEED DATA (ISRAELI BUSINESSES, SERVICES, CLIENTS)

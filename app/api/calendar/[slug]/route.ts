@@ -1,38 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBusinessBySlug, getAppointments } from "@/lib/db";
+import { verifyCalendarToken } from "@/lib/auth";
+import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 import { Appointment } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// Helper to format ISO date string into iCalendar format (YYYYMMDDTHHmmssZ)
 function toIcsDate(isoString: string): string {
-  const d = new Date(isoString);
-  return d
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
+  return new Date(isoString).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
-// Clean text for iCalendar description
+// RFC 5545 text escaping; also strips CR/LF so user input cannot inject ICS properties.
 function escapeIcsText(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/[\r\x00-\x08\x0b-\x1f]/g, "");
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { slug: string } }
-) {
+// Private subscription feed: requires the owner's secret ?t= token
+// (shown only inside the logged-in admin). Contains client names and phones.
+export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
   try {
+    if (!rateLimit(`ics:${clientIp(request)}`, 60, 10 * 60 * 1000)) return tooMany();
+
     const slug = params.slug;
     const business = await getBusinessBySlug(slug);
 
-    if (!business) {
-      return new NextResponse("Business not found", { status: 404 });
+    // Same response for "no such business" and "bad token": no slug enumeration.
+    if (!business || !verifyCalendarToken(business.id, request.nextUrl.searchParams.get("t"))) {
+      return new NextResponse("Not found", { status: 404 });
     }
 
     const appointments = await getAppointments(business.id);
     const confirmedApps = appointments.filter((a: Appointment) => a.status === "confirmed");
-
     const nowIcs = toIcsDate(new Date().toISOString());
 
     const icsContent = [
@@ -48,25 +51,28 @@ export async function GET(
     ];
 
     for (const app of confirmedApps) {
-      const startIcs = toIcsDate(app.start_time);
-      const endIcs = toIcsDate(app.end_time);
-      const clientName = app.client
-        ? `${app.client.first_name} ${app.client.last_name}`
-        : "לקוח";
+      const clientName = app.client ? `${app.client.first_name} ${app.client.last_name}` : "לקוח";
       const serviceName = app.service?.name || "טיפול";
-      const price = app.service?.price || 0;
+      const price = Number(app.service?.price) || 0;
       const phone = app.client?.phone || "";
 
-      const summary = `${serviceName} - ${clientName}`;
-      const description = `שם הלקוח: ${clientName}\\nטלפון: ${phone}\\nשירות: ${serviceName}\\nמחיר: ₪${price}\\nנקבע דרך מערכת Torli`;
+      const description = [
+        `שם הלקוח: ${clientName}`,
+        `טלפון: ${phone}`,
+        `שירות: ${serviceName}`,
+        `מחיר: ₪${price}`,
+        "נקבע דרך מערכת Torli",
+      ]
+        .map(escapeIcsText)
+        .join("\\n");
 
       icsContent.push(
         "BEGIN:VEVENT",
         `UID:${app.id}@torli.app`,
         `DTSTAMP:${nowIcs}`,
-        `DTSTART:${startIcs}`,
-        `DTEND:${endIcs}`,
-        `SUMMARY:${escapeIcsText(summary)}`,
+        `DTSTART:${toIcsDate(app.start_time)}`,
+        `DTEND:${toIcsDate(app.end_time)}`,
+        `SUMMARY:${escapeIcsText(`${serviceName} - ${clientName}`)}`,
         `DESCRIPTION:${description}`,
         `LOCATION:${escapeIcsText(business.name)}`,
         "STATUS:CONFIRMED",
@@ -76,14 +82,13 @@ export async function GET(
 
     icsContent.push("END:VCALENDAR");
 
-    const body = icsContent.join("\r\n");
-
-    return new NextResponse(body, {
+    return new NextResponse(icsContent.join("\r\n"), {
       status: 200,
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
-        "Content-Disposition": `inline; filename="${slug}-calendar.ics"`,
-        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Content-Disposition": `inline; filename="calendar.ics"`,
+        "Cache-Control": "private, no-store",
+        "X-Robots-Tag": "noindex",
       },
     });
   } catch (error) {

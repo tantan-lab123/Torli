@@ -1,71 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loginBusiness } from "@/lib/db";
+import {
+  getBusinessByPhone,
+  findBusinessByVerifiedGoogle,
+  setBusinessPasswordHash,
+} from "@/lib/db";
+import {
+  hashPassword,
+  setSessionCookie,
+  toOwnerBusiness,
+  verifyGoogleAccessToken,
+  verifyPassword,
+} from "@/lib/auth";
+import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
+const FIFTEEN_MIN = 15 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   try {
+    const ip = clientIp(request);
+    if (!rateLimit(`login:ip:${ip}`, 20, FIFTEEN_MIN)) return tooMany();
+
     const body = await request.json();
 
-    // Check if Google Sign-In
+    // Google sign-in: identity is verified server-side from the Supabase access token.
     if (body.provider === "google") {
-      const { email, googleId } = body;
-      if (!email && !googleId) {
-        return NextResponse.json(
-          { error: "חסרים פרטי התחברות של Google" },
-          { status: 400 }
-        );
+      const identity = await verifyGoogleAccessToken(body.access_token);
+      if (!identity) {
+        return NextResponse.json({ error: "אימות Google נכשל" }, { status: 401 });
       }
-
-      const business = await loginBusiness({
-        email,
-        googleId,
-      });
-
+      const business = await findBusinessByVerifiedGoogle(identity.email, identity.id);
       if (!business) {
-        return NextResponse.json(
-          { error: "לא נמצא חשבון מקושר ל-Google זה" },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: "לא נמצא חשבון מקושר ל-Google זה" }, { status: 404 });
       }
-
-      return NextResponse.json({
-        success: true,
-        business,
-      });
+      const res = NextResponse.json({ success: true, business: toOwnerBusiness(business) });
+      setSessionCookie(res, business.id);
+      return res;
     }
 
     // Credentials login (phone + password)
     const { phone, password } = body;
+    if (typeof phone !== "string" || typeof password !== "string" || !phone || !password) {
+      return NextResponse.json({ error: "יש להזין מספר טלפון וסיסמה" }, { status: 400 });
+    }
+    const digits = phone.replace(/\D/g, "");
+    if (!rateLimit(`login:phone:${digits}`, 6, FIFTEEN_MIN)) return tooMany();
 
-    if (!phone || !password) {
-      return NextResponse.json(
-        { error: "יש להזין מספר טלפון וסיסמה" },
-        { status: 400 }
-      );
+    const business = await getBusinessByPhone(digits);
+    const check = verifyPassword(password, business?.password);
+    if (!business || !check.ok) {
+      return NextResponse.json({ error: "מספר טלפון או סיסמה אינם נכונים" }, { status: 401 });
+    }
+    if (check.needsRehash) {
+      await setBusinessPasswordHash(business.id, hashPassword(password));
     }
 
-    const business = await loginBusiness({
-      phone,
-      pinOrPassword: password,
-    });
-
-    if (!business) {
-      return NextResponse.json(
-        { error: "מספר טלפון או סיסמה אינם נכונים" },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      business,
-    });
+    const res = NextResponse.json({ success: true, business: toOwnerBusiness(business) });
+    setSessionCookie(res, business.id);
+    return res;
   } catch (error) {
     console.error("Login error:", error);
-    return NextResponse.json(
-      { error: "שגיאת שרת במהלך ההתחברות" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "שגיאת שרת במהלך ההתחברות" }, { status: 500 });
   }
 }

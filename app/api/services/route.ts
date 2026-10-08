@@ -1,48 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import {
   getServices,
+  getServiceById,
   createService,
   updateService,
   deleteService,
 } from "@/lib/db";
+import { forbidden, getSessionBusinessId, unauthorized } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const businessId = searchParams.get("business_id");
-
-  if (!businessId) {
-    return NextResponse.json(
-      { error: "business_id parameter is required" },
-      { status: 400 }
-    );
+const serviceFields = {
+  name: z.string().trim().min(1).max(120),
+  duration_minutes: z.coerce.number().int().min(1).max(1440),
+  buffer_minutes: z.coerce.number().int().min(0).max(240),
+  price: z.coerce.number().min(0).max(100000),
+};
+const createSchema = z.object({ ...serviceFields, buffer_minutes: serviceFields.buffer_minutes.default(5), price: serviceFields.price.default(0) });
+const updateSchema = z.object({ id: z.string().min(1) }).extend(
+  Object.fromEntries(Object.entries(serviceFields).map(([k, v]) => [k, v.optional()])) as {
+    name: z.ZodOptional<typeof serviceFields.name>;
+    duration_minutes: z.ZodOptional<typeof serviceFields.duration_minutes>;
+    buffer_minutes: z.ZodOptional<typeof serviceFields.buffer_minutes>;
+    price: z.ZodOptional<typeof serviceFields.price>;
   }
+);
 
-  const services = await getServices(businessId);
-  return NextResponse.json(services);
+/** Public: the booking page lists a business's services. */
+export async function GET(request: NextRequest) {
+  const businessId = request.nextUrl.searchParams.get("business_id");
+  if (!businessId) {
+    return NextResponse.json({ error: "business_id parameter is required" }, { status: 400 });
+  }
+  return NextResponse.json(await getServices(businessId));
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { business_id, name, duration_minutes, buffer_minutes, price } = body;
+    const businessId = getSessionBusinessId(request);
+    if (!businessId) return unauthorized();
 
-    if (!business_id || !name || !duration_minutes) {
-      return NextResponse.json(
-        { error: "חסרים שדות חובה (עסק, שם שירות, משך זמן)" },
-        { status: 400 }
-      );
+    const parsed = createSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "חסרים או שגויים שדות חובה (שם שירות, משך זמן)" }, { status: 400 });
     }
-
-    const newService = await createService({
-      business_id,
-      name,
-      duration_minutes: Number(duration_minutes),
-      buffer_minutes: Number(buffer_minutes ?? 5),
-      price: Number(price ?? 0),
-    });
-
+    const newService = await createService({ business_id: businessId, ...parsed.data });
     return NextResponse.json(newService);
   } catch (error) {
     console.error("Error creating service:", error);
@@ -52,28 +55,22 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, ...updates } = body;
+    const businessId = getSessionBusinessId(request);
+    if (!businessId) return unauthorized();
 
-    if (!id) {
-      return NextResponse.json({ error: "חסר מזהה שירות" }, { status: 400 });
+    const parsed = updateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "נתוני שירות לא תקינים" }, { status: 400 });
     }
+    const { id, ...updates } = parsed.data;
 
-    const updated = await updateService(id, {
-      ...(updates.name ? { name: updates.name } : {}),
-      ...(updates.duration_minutes !== undefined
-        ? { duration_minutes: Number(updates.duration_minutes) }
-        : {}),
-      ...(updates.buffer_minutes !== undefined
-        ? { buffer_minutes: Number(updates.buffer_minutes) }
-        : {}),
-      ...(updates.price !== undefined ? { price: Number(updates.price) } : {}),
-    });
+    const existing = await getServiceById(id);
+    if (!existing) return NextResponse.json({ error: "שירות לא נמצא" }, { status: 404 });
+    if (existing.business_id !== businessId) return forbidden();
 
-    if (!updated) {
-      return NextResponse.json({ error: "שירות לא נמצא" }, { status: 404 });
-    }
-
+    const cleaned = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+    const updated = await updateService(id, cleaned);
+    if (!updated) return NextResponse.json({ error: "שירות לא נמצא" }, { status: 404 });
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Error updating service:", error);
@@ -82,13 +79,20 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const id = searchParams.get("id");
+  try {
+    const businessId = getSessionBusinessId(request);
+    if (!businessId) return unauthorized();
 
-  if (!id) {
-    return NextResponse.json({ error: "חסר מזהה שירות" }, { status: 400 });
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "חסר מזהה שירות" }, { status: 400 });
+
+    const existing = await getServiceById(id);
+    if (!existing) return NextResponse.json({ success: false }, { status: 404 });
+    if (existing.business_id !== businessId) return forbidden();
+
+    return NextResponse.json({ success: await deleteService(id) });
+  } catch (error) {
+    console.error("Error deleting service:", error);
+    return NextResponse.json({ error: "שגיאה במחיקת שירות" }, { status: 500 });
   }
-
-  const success = await deleteService(id);
-  return NextResponse.json({ success });
 }
