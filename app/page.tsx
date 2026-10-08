@@ -54,7 +54,7 @@ export default async function HomePage() {
       <section className="px-4 pt-8 pb-12 text-center max-w-2xl mx-auto space-y-4">
         <Badge variant="default" className="px-3 py-1 text-xs">
           <Sparkles className="w-3.5 h-3.5 ml-1 text-indigo-600" />
-          <span>Mobile-First SaaS MVP • Next.js 14 + Supabase</span>
+          <span>הלקוחות קובעים לבד, אתה חוזר לעבוד</span>
         </Badge>
 
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
