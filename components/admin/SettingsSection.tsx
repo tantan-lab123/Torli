@@ -227,13 +227,15 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
 
   const handlePrintQR = () => {
     triggerHaptic(20);
+    const esc = (t: string) =>
+      t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const win = window.open("", "_blank");
     if (!win) return;
     win.document.write(`
       <!DOCTYPE html>
       <html dir="rtl">
         <head>
-          <title>קוד QR - ${business.name}</title>
+          <title>קוד QR - ${esc(business.name)}</title>
           <style>
             body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; }
             .card { max-width: 400px; margin: 0 auto; border: 2px dashed #3B42C4; border-radius: 24px; padding: 30px; }
@@ -246,10 +248,10 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
         <body>
           <div class="card">
             <div class="badge">סרוק לקביעת תור מיידי</div>
-            <h1>${business.name}</h1>
+            <h1>${esc(business.name)}</h1>
             <p>שמחים שבאת! קובעים תור ישירות מהנייד תוך 30 שניות</p>
             <img src="${qrCodeImgUrl}" alt="QR Code" />
-            <p style="font-family: monospace; font-size: 14px; color: #475569;">${bookingUrl}</p>
+            <p style="font-family: monospace; font-size: 14px; color: #475569;">${esc(bookingUrl)}</p>
           </div>
           <script>window.onload = function() { window.print(); }</script>
         </body>

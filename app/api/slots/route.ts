@@ -8,10 +8,13 @@ import {
   eachDayOfInterval,
   format,
 } from "date-fns";
+import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  if (!rateLimit(`slots:${clientIp(request)}`, 120, 10 * 60 * 1000)) return tooMany();
+
   const { searchParams } = request.nextUrl;
   const businessId = searchParams.get("business_id");
   const serviceId = searchParams.get("service_id");
@@ -23,6 +26,13 @@ export async function GET(request: NextRequest) {
       { error: "business_id, service_id, and at least date or month are required" },
       { status: 400 }
     );
+  }
+
+  if (
+    (dateParam && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateParam)) ||
+    (monthParam && !/^[0-9]{4}-[0-9]{2}$/.test(monthParam))
+  ) {
+    return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
   const business = await getBusinessById(businessId);

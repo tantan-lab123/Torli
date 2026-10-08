@@ -19,6 +19,7 @@ import {
   verifyGoogleAccessToken,
 } from "@/lib/auth";
 import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
+import { sanitizeDateOverrides, sanitizeSettings, sanitizeWorkingHours } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -97,12 +98,15 @@ export async function PATCH(request: NextRequest) {
     ) {
       return NextResponse.json({ error: "מרווח זמן לא תקין" }, { status: 400 });
     }
-    if (settings !== undefined && (typeof settings !== "object" || settings === null)) {
-      return NextResponse.json({ error: "הגדרות לא תקינות" }, { status: 400 });
+    // Whitelist + sanitise client-controlled JSON (blocks javascript: links, oversized/odd shapes).
+    const cleanSettings = settings !== undefined ? sanitizeSettings(settings) : undefined;
+    const cleanHours = working_hours !== undefined ? sanitizeWorkingHours(working_hours) : undefined;
+    if (working_hours !== undefined && !cleanHours) {
+      return NextResponse.json({ error: "שעות עבודה לא תקינות" }, { status: 400 });
     }
-    // Size guard for client-controlled JSON (logo / cover are data URLs).
-    if (JSON.stringify(settings ?? {}).length > 3_000_000 || JSON.stringify(working_hours ?? {}).length > 50_000) {
-      return NextResponse.json({ error: "הנתונים גדולים מדי" }, { status: 413 });
+    const cleanOverrides = date_overrides !== undefined ? sanitizeDateOverrides(date_overrides) : undefined;
+    if (date_overrides !== undefined && !cleanOverrides) {
+      return NextResponse.json({ error: "חריגות תאריך לא תקינות" }, { status: 400 });
     }
 
     const updated = await updateBusiness(businessId, {
@@ -110,12 +114,12 @@ export async function PATCH(request: NextRequest) {
       ...(owner_phone ? { owner_phone } : {}),
       ...(owner_email ? { owner_email: String(owner_email).trim().slice(0, 254) } : {}),
       ...(password ? { password } : {}),
-      ...(working_hours ? { working_hours } : {}),
+      ...(cleanHours ? { working_hours: cleanHours } : {}),
       ...(slot_interval_minutes !== undefined
         ? { slot_interval_minutes: Number(slot_interval_minutes) }
         : {}),
-      ...(date_overrides !== undefined ? { date_overrides } : {}),
-      ...(settings !== undefined ? { settings } : {}),
+      ...(cleanOverrides ? { date_overrides: cleanOverrides } : {}),
+      ...(cleanSettings !== undefined ? { settings: cleanSettings } : {}),
     });
 
     if (!updated) {
