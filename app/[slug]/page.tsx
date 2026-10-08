@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Calendar as CalendarIcon,
@@ -55,6 +55,13 @@ const STORAGE_KEY = "schedule_saved_client_v1";
 // Booking progress is parked here while the customer is away signing in with Google.
 const PENDING_KEY = "torli_pending_booking_v1";
 
+// The time page opens on these three tabs, so a long day is not one wall of times.
+const DAY_PARTS: { id: TimeSlot["period"]; label: string; hours: string }[] = [
+  { id: "morning", label: "בוקר", hours: "עד 12:00" },
+  { id: "afternoon", label: "צהריים", hours: "12:00-17:00" },
+  { id: "evening", label: "ערב", hours: "מ-17:00" },
+];
+
 export default function BookingPage() {
   const params = useParams();
   const router = useRouter();
@@ -76,6 +83,8 @@ export default function BookingPage() {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [slotMessage, setSlotMessage] = useState<string | undefined>();
+  const [slotPeriod, setSlotPeriod] = useState<TimeSlot["period"] | null>(null);
+  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Client Details Form
   const [phone, setPhone] = useState("");
@@ -1000,7 +1009,7 @@ export default function BookingPage() {
         {/* STEP 3: PICK A TIME (own page, with previous / next day arrows) */}
         {/* ========================================================================= */}
         {step === 3 && (
-          <div className="space-y-5 pb-36 animate-in fade-in duration-200">
+          <div className="space-y-5 pb-10 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setStep(2)}
@@ -1149,130 +1158,105 @@ export default function BookingPage() {
                   )}
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Morning Slots */}
-                {slots.some((s) => s.period === "morning") && (
-                  <div>
-                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
-                      בוקר (עד 12:00)
-                    </span>
-                    <div className="grid grid-cols-4 gap-2">
-                      {slots
-                        .filter((s) => s.period === "morning")
-                        .map((slot, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            aria-pressed={selectedSlot?.startTime === slot.startTime}
-                            onClick={() => {
-                              triggerHaptic(15);
-                              setSelectedSlot(slot);
-                            }}
-                            className={cn(
-                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
-                              selectedSlot?.startTime === slot.startTime
-                                ? "bg-brand-600 text-white border-brand-600"
-                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
-                            )}
-                          >
-                            {slot.formattedTime}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
+              (() => {
+                const counts = Object.fromEntries(
+                  DAY_PARTS.map((p) => [p.id, slots.filter((sl) => sl.period === p.id).length])
+                ) as Record<TimeSlot["period"], number>;
+                const open = DAY_PARTS.filter((p) => counts[p.id] > 0);
+                // Keep the customer's tab while they move between days; open the only one when there is just one.
+                const active =
+                  slotPeriod && counts[slotPeriod] > 0
+                    ? slotPeriod
+                    : open.length === 1
+                      ? open[0].id
+                      : null;
 
-                {/* Afternoon Slots */}
-                {slots.some((s) => s.period === "afternoon") && (
-                  <div>
-                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
-                      צהריים (12:00 - 17:00)
-                    </span>
-                    <div className="grid grid-cols-4 gap-2">
-                      {slots
-                        .filter((s) => s.period === "afternoon")
-                        .map((slot, i) => (
+                return (
+                  <div className="space-y-4">
+                    <div role="tablist" aria-label="חלק ביום" className="grid grid-cols-3 gap-2">
+                      {DAY_PARTS.map((part) => {
+                        const count = counts[part.id];
+                        const on = active === part.id;
+                        return (
                           <button
-                            key={i}
+                            key={part.id}
                             type="button"
-                            aria-pressed={selectedSlot?.startTime === slot.startTime}
+                            role="tab"
+                            id={`part-${part.id}`}
+                            aria-selected={on}
+                            aria-controls="day-part-times"
+                            disabled={count === 0}
+                            data-on={on || undefined}
                             onClick={() => {
-                              triggerHaptic(15);
-                              setSelectedSlot(slot);
+                              triggerHaptic(10);
+                              setSlotPeriod(part.id);
                             }}
                             className={cn(
-                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
-                              selectedSlot?.startTime === slot.startTime
-                                ? "bg-brand-600 text-white border-brand-600"
-                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
+                              "m-chip rounded-xl border px-2 py-3 flex flex-col items-center justify-center gap-0.5",
+                              on
+                                ? "bg-brand-600 border-brand-600 text-white"
+                                : count === 0
+                                  ? "bg-paper border-ink-100 text-ink-300 cursor-not-allowed"
+                                  : "m-key2 bg-white border-ink-200 text-ink-900"
                             )}
                           >
-                            {slot.formattedTime}
+                            <span className="text-base font-extrabold leading-tight">{part.label}</span>
+                            <span className={cn("text-xs font-semibold", on ? "text-brand-100" : "text-ink-500")}>
+                              {part.hours}
+                            </span>
+                            <span className={cn("text-xs font-bold", on ? "text-lime" : count === 0 ? "text-ink-300" : "text-brand-600")}>
+                              {count === 0 ? "אין פנויות" : count === 1 ? "אחת פנויה" : `${count} פנויות`}
+                            </span>
                           </button>
-                        ))}
+                        );
+                      })}
                     </div>
-                  </div>
-                )}
 
-                {/* Evening Slots */}
-                {slots.some((s) => s.period === "evening") && (
-                  <div>
-                    <span className="block text-xs font-bold text-ink-500 mb-2 text-right">
-                      ערב (מ-17:00)
-                    </span>
-                    <div className="grid grid-cols-4 gap-2">
-                      {slots
-                        .filter((s) => s.period === "evening")
-                        .map((slot, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            aria-pressed={selectedSlot?.startTime === slot.startTime}
-                            onClick={() => {
-                              triggerHaptic(15);
-                              setSelectedSlot(slot);
-                            }}
-                            className={cn(
-                              "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
-                              selectedSlot?.startTime === slot.startTime
-                                ? "bg-brand-600 text-white border-brand-600"
-                                : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
-                            )}
-                          >
-                            {slot.formattedTime}
-                          </button>
-                        ))}
-                    </div>
+                    {active ? (
+                      <div
+                        key={`${format(selectedDate, "yyyy-MM-dd")}-${active}`}
+                        id="day-part-times"
+                        role="tabpanel"
+                        aria-labelledby={`part-${active}`}
+                        className="grid grid-cols-4 gap-2 animate-in fade-in"
+                      >
+                        {slots
+                          .filter((sl) => sl.period === active)
+                          .map((slot) => {
+                            const picked = selectedSlot?.startTime === slot.startTime;
+                            return (
+                              <button
+                                key={slot.startTime}
+                                type="button"
+                                aria-pressed={picked}
+                                onClick={() => {
+                                  triggerHaptic(15);
+                                  setSelectedSlot(slot);
+                                  // A short beat so the chosen time visibly pops, then straight to the details page
+                                  if (advanceTimer.current) clearTimeout(advanceTimer.current);
+                                  advanceTimer.current = setTimeout(() => setStep(4), 220);
+                                }}
+                                className={cn(
+                                  "m-chip m-press h-12 rounded-md text-[15px] font-bold border flex items-center justify-center",
+                                  picked
+                                    ? "bg-brand-600 text-white border-brand-600"
+                                    : "bg-white text-ink-900 border-ink-200 hover:border-brand-400"
+                                )}
+                              >
+                                {slot.formattedTime}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <p className="py-6 text-center text-sm font-semibold text-ink-500">
+                        בחרו בוקר, צהריים או ערב כדי לראות את השעות הפנויות
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()
             )}
-
-            {/* Extra safety spacer for fixed bottom footer */}
-            <div className="h-12" />
-
-            {/* Bottom Sticky Action */}
-            <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white/95 backdrop-blur-md border-t border-ink-200 z-20">
-              <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-                <div className="text-right min-w-0">
-                  <span className="text-xs text-ink-500">שעה נבחרת</span>
-                  <p className="text-sm font-bold text-ink-900">
-                    {selectedSlot ? selectedSlot.formattedTime : "אנא בחר שעה"}
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => {
-                    if (selectedSlot) setStep(4);
-                  }}
-                  disabled={!selectedSlot}
-                  className="px-5 whitespace-nowrap flex-none"
-                >
-                  <span>המשך לפרטים</span>
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                </Button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1280,7 +1264,7 @@ export default function BookingPage() {
         {/* STEP 3: FRICTIONLESS CLIENT DETAILS */}
         {/* ========================================================================= */}
         {step === 4 && (
-          <div className="space-y-5 animate-in fade-in duration-200">
+          <div className="space-y-5 pb-32 animate-in fade-in duration-200">
             {/* Header with Back Button */}
             <div className="flex items-center justify-between">
               <button

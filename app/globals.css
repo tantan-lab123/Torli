@@ -212,14 +212,17 @@ a {
 .m-ticket::before { right: -8px; }
 .m-ticket::after { left: -8px; }
 
-/* Lightweight versions of the enter utilities used across the screens */
-.animate-in { animation: m-enter 0.24s var(--m-out) both; }
+/* Lightweight versions of the enter utilities used across the screens.
+   They only fill "backwards": a transform left on a screen after it enters would
+   trap its position:fixed footers and modals inside it. The plain fade has no
+   transform at all, because whole pages use it. */
+.animate-in { animation: m-enter 0.24s var(--m-out) backwards; }
 .animate-in.slide-in-from-bottom,
 .animate-in.slide-in-from-bottom-3 { animation-name: m-enter-up; }
 .animate-in.slide-in-from-top { animation-name: m-enter-down; }
 .animate-in.zoom-in-95,
 .animate-in.zoom-in-75 { animation-name: m-enter-zoom; }
-@keyframes m-enter { from { opacity: 0; transform: translateY(6px); } }
+@keyframes m-enter { from { opacity: 0; } }
 @keyframes m-enter-up { from { opacity: 0; transform: translateY(24px); } }
 @keyframes m-enter-down { from { opacity: 0; transform: translateY(-12px); } }
 @keyframes m-enter-zoom { from { opacity: 0; transform: scale(0.95); } }
