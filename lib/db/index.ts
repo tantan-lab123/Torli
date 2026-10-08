@@ -82,16 +82,18 @@ export function normalizeBusinessRecord(raw: any): Business {
 }
 
 export async function getBusinesses(): Promise<Business[]> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from("businesses").select("*");
+  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+    const client = supabaseAdmin || supabase!;
+    const { data, error } = await client.from("businesses").select("*");
     if (!error && data) return data.map(normalizeBusinessRecord);
   }
   return db.businesses.map(normalizeBusinessRecord);
 }
 
 export async function getBusinessBySlug(slug: string): Promise<Business | null> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+    const client = supabaseAdmin || supabase!;
+    const { data, error } = await client
       .from("businesses")
       .select("*")
       .eq("slug", slug)
@@ -103,8 +105,9 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
 }
 
 export async function getBusinessById(id: string): Promise<Business | null> {
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase
+  if (isSupabaseConfigured && (supabaseAdmin || supabase)) {
+    const client = supabaseAdmin || supabase!;
+    const { data, error } = await client
       .from("businesses")
       .select("*")
       .eq("id", id)
