@@ -3,7 +3,7 @@ import { Heebo } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
-// Brand font: Plinko FS (variable weight 100-800, licensed for the site). Heebo is the fallback.
+// Brand font: Plinko FS (variable weight 100-800). Heebo is the fallback.
 const plinko = localFont({
   src: "./fonts/PlinkoFS-VF.woff2",
   weight: "100 800",
