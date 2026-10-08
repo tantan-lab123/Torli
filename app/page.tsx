@@ -178,14 +178,6 @@ export default async function HomePage() {
             <Link href="/admin" className="hover:text-indigo-600">
               ניהול יומן
             </Link>
-            <a
-              href="/api/cron/reminders?secret=schedule-cron-secret-key-123"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-indigo-600"
-            >
-              API תזכורות (Cron)
-            </a>
           </div>
         </div>
       </footer>
