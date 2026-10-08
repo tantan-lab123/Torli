@@ -161,7 +161,7 @@ begin
     -- Services for Maya Nails
     insert into public.services (id, business_id, name, duration_minutes, buffer_minutes, price)
     values
-    (s_nails,    maya_id, 'לק ג''ל ומניקור רוסי', 60, 10, 140),
+    (s_nails,    maya_id, 'לק ג''ל ומניקור', 60, 10, 140),
     (s_pedicure, maya_id, 'פדיקור ספא מפנק', 50, 10, 160)
     on conflict (id) do nothing;
 

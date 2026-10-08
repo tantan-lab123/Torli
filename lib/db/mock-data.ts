@@ -105,7 +105,7 @@ export const INITIAL_SERVICES: Service[] = [
   {
     id: "s-maya-1",
     business_id: "b2222222-2222-2222-2222-222222222222",
-    name: "מניקור רוסי משולב לק ג'ל",
+    name: "מניקור משולב לק ג'ל",
     duration_minutes: 60,
     buffer_minutes: 10,
     price: 140,

@@ -247,6 +247,11 @@ export default function AdminDashboardPage() {
       ? "register"
       : "login"
   );
+  // In-app navigation (a <Link> click) renders this page before the address bar updates, so the
+  // initializer above can still see the old URL. Re-check once the page is mounted.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "1") setAuthTab("register");
+  }, []);
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");

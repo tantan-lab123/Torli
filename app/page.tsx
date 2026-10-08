@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Torli | יומן תורים אונליין לעסקים",
   description:
-    "הלקוחות קובעים, משנים ומבטלים תורים לבד מקישור אחד, ואתם מקבלים התראה ורואים הכל ביומן בטלפון. בלי אפליקציה ללקוח, בעברית מלאה.",
+    "הלקוחות קובעים, משנים ומבטלים תורים לבד מקישור אחד, ואתם מקבלים התראה ורואים הכל ביומן בטלפון. בלי אפליקציה ללקוח.",
 };
 
 // Demo booking pages the landing page links to, in order of preference. Only the ones
@@ -253,7 +253,7 @@ export default async function HomePage() {
               className="l-in mt-10 grid gap-2.5 text-[15px] text-ink-700 sm:flex sm:flex-wrap sm:gap-x-6"
               style={delay(320)}
             >
-              {["בלי אפליקציה ללקוח", "עברית מלאה, מימין לשמאל", "התראה על כל תור חדש"].map((t) => (
+              {["בלי אפליקציה ללקוח", "מוכן לשימוש תוך דקות", "התראה על כל תור חדש"].map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-brand-600" strokeWidth={2.75} aria-hidden="true" />
                   {t}

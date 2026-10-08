@@ -276,7 +276,7 @@ function PushBanner({ on }: { on: boolean }) {
         </span>
         <span className="block text-[length:3.6cqw] font-extrabold leading-tight text-ink-900">תור חדש נקבע</span>
         <span className="block text-[length:3.2cqw] leading-snug text-ink-700">
-          נועה לוי · מניקור רוסי משולב לק ג׳ל · יום שלישי, 13 באוקטובר 11:30
+          נועה לוי · מניקור משולב לק ג׳ל · יום שלישי, 13 באוקטובר 11:30
         </span>
       </span>
     </div>

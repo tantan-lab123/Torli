@@ -323,7 +323,7 @@ export async function createBusiness(input: {
       { name: "חבילת VIP: תספורת + זקן", duration: 45, buffer: 10, price: 115 },
     ],
     nails: [
-      { name: "לק ג'ל ומניקור רוסי", duration: 60, buffer: 10, price: 140 },
+      { name: "לק ג'ל ומניקור", duration: 60, buffer: 10, price: 140 },
       { name: "מבנה אנטומי וחיזוק", duration: 75, buffer: 15, price: 180 },
       { name: "פדיקור ספא מפנק", duration: 50, buffer: 10, price: 150 },
     ],
