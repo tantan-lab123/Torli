@@ -34,8 +34,10 @@ export function Modal({
 
   if (!isOpen) return null;
 
+  // Dialogs sit above all page chrome: header and tab bar (z-40), the "+" button (z-50)
+  // and the "More" sheet (z-60).
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div
         onClick={onClose}
@@ -76,7 +78,9 @@ export function Modal({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 pt-5 pb-[calc(env(safe-area-inset-bottom)+20px)] sm:pb-5">
+          {children}
+        </div>
       </div>
     </div>
   );
