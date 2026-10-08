@@ -58,65 +58,79 @@ export const AdminFAB: React.FC<AdminFABProps> = ({
     }
   };
 
+  const action =
+    "m-press flex items-center gap-2.5 h-12 px-4 rounded-xl bg-white text-ink-900 text-sm font-semibold shadow-lg border border-ink-200 hover:bg-ink-50 whitespace-nowrap";
+  const actionIcon = "w-8 h-8 rounded-lg flex items-center justify-center flex-none";
+
   return (
-    <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start gap-2.5">
-      {/* Expanded Actions Popover */}
+    <>
       {isOpen && (
-        <div className="flex flex-col items-start gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <button
-            onClick={() => {
-              triggerHaptic(20);
-              setIsOpen(false);
-              onNewAppointment();
-            }}
-            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white text-slate-800 text-xs font-bold shadow-lg border border-slate-200 hover:bg-slate-50 transition-all hover:scale-105"
-          >
-            <div className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-              <CalendarPlus className="w-4 h-4" />
-            </div>
-            <span>תור חדש ידני (Walk-in)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              triggerHaptic(20);
-              setIsOpen(false);
-              onBlockTime();
-            }}
-            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white text-slate-800 text-xs font-bold shadow-lg border border-slate-200 hover:bg-slate-50 transition-all hover:scale-105"
-          >
-            <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-            <span>חסימת זמן / הפסקה</span>
-          </button>
-
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white text-slate-800 text-xs font-bold shadow-lg border border-slate-200 hover:bg-slate-50 transition-all hover:scale-105"
-          >
-            <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
-            </div>
-            <span>{copied ? "הקישור הועתק בהצלחה!" : "שיתוף עמוד העסק"}</span>
-          </button>
-        </div>
+        <div
+          className="fixed inset-0 z-[45] bg-ink-950/25 animate-in fade-in"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
       )}
-
-      {/* Main Trigger Button */}
-      <button
-        onClick={toggle}
-        className={cn(
-          "w-14 h-14 rounded-full flex items-center justify-center text-white shadow-xl transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/30",
-          isOpen
-            ? "bg-slate-800 rotate-90 hover:bg-slate-900"
-            : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/35 hover:scale-105"
-        )}
-        aria-label="פעולות מהירות"
-        title="פעולות מהירות (+)"
+      {/* Phone: docked in the middle of the bottom tab bar. Desktop: floating at the corner. */}
+      <div
+        className="fixed z-50 flex flex-col items-center gap-2.5 left-1/2 -translate-x-1/2 md:left-6 md:translate-x-0 md:items-start bottom-[calc(env(safe-area-inset-bottom)+8px)] md:bottom-6"
       >
-        {isOpen ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
-      </button>
-    </div>
+        {isOpen && (
+          <div className="flex flex-col items-stretch md:items-start gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                setIsOpen(false);
+                onNewAppointment();
+              }}
+              className={action}
+            >
+              <span className={cn(actionIcon, "bg-brand-50 text-brand-600")}>
+                <CalendarPlus className="w-[18px] h-[18px]" />
+              </span>
+              <span>תור חדש</span>
+            </button>
+
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                setIsOpen(false);
+                onBlockTime();
+              }}
+              className={action}
+            >
+              <span className={cn(actionIcon, "bg-pending-100 text-pending-700")}>
+                <Clock className="w-[18px] h-[18px]" />
+              </span>
+              <span>חסימת זמן או הפסקה</span>
+            </button>
+
+            <button onClick={handleShare} className={action}>
+              <span className={cn(actionIcon, "bg-ink-100 text-ink-700")}>
+                {copied ? <Check className="w-[18px] h-[18px] text-success-600" /> : <Share2 className="w-[18px] h-[18px]" />}
+              </span>
+              <span>{copied ? "הקישור הועתק" : "שיתוף הקישור להזמנה"}</span>
+            </button>
+          </div>
+        )}
+
+        {/* Main trigger: a lime-on-green key */}
+        <button
+          onClick={toggle}
+          aria-expanded={isOpen}
+          className={cn(
+            "m-fab m-key w-14 h-14 rounded-2xl flex items-center justify-center focus:outline-none",
+            isOpen ? "bg-ink-900 text-white" : "bg-brand-600 text-lime"
+          )}
+          aria-label={isOpen ? "סגירת הפעולות" : "תור חדש ופעולות מהירות"}
+          title="תור חדש ופעולות מהירות"
+        >
+          {isOpen ? <X className="w-6 h-6" /> : <Plus className="w-7 h-7" strokeWidth={2.4} />}
+        </button>
+        <span className="md:hidden -mt-1.5 text-[11px] font-semibold text-brand-600 pointer-events-none" aria-hidden="true">
+          {isOpen ? "" : "תור חדש"}
+        </span>
+      </div>
+    </>
   );
 };

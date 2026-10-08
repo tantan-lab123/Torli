@@ -4,48 +4,38 @@
 
 @layer base {
   :root {
-    --background: #f8fafc;
-    --foreground: #0f172a;
-    --card: #ffffff;
-    --card-foreground: #0f172a;
-    --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #4f46e5;
-    --primary-foreground: #ffffff;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #f8fafc;
-    --accent-foreground: #0f172a;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: #e2e8f0;
-    --input: #e2e8f0;
-    --ring: #6366f1;
-    --radius: 1rem;
+    --background: #F4F1E8;
+    --foreground: #17201A;
+    --card: #FFFDF9;
+    --card-foreground: #17201A;
+    --popover: #FFFDF9;
+    --popover-foreground: #17201A;
+    --primary: #1E4D36;
+    --primary-foreground: #FFFDF9;
+    --secondary: #EDE9DE;
+    --secondary-foreground: #17201A;
+    --muted: #EDE9DE;
+    --muted-foreground: #4D564F;
+    --accent: #CFEA6E;
+    --accent-foreground: #1A2E12;
+    --destructive: #9E3420;
+    --destructive-foreground: #FFFDF9;
+    --border: #E2DDCF;
+    --input: #E2DDCF;
+    --ring: #1E4D36;
+    --radius: 10px;
+    --m-spring: cubic-bezier(.34, 1.56, .64, 1);
+    --m-out: cubic-bezier(.2, .8, .2, 1);
   }
 
-  .dark {
-    --background: #090d16;
-    --foreground: #f8fafc;
-    --card: #111827;
-    --card-foreground: #f8fafc;
-    --popover: #111827;
-    --popover-foreground: #f8fafc;
-    --primary: #6366f1;
-    --primary-foreground: #ffffff;
-    --secondary: #1e293b;
-    --secondary-foreground: #f8fafc;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
-    --destructive: #ef4444;
-    --destructive-foreground: #ffffff;
-    --border: #1f293d;
-    --input: #1f293d;
-    --ring: #818cf8;
+  :focus-visible {
+    outline: 2px solid #1E4D36;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: #CFEA6E;
+    color: #1A2E12;
   }
 }
 
@@ -59,34 +49,29 @@ body {
   background: var(--background);
   min-height: 100vh;
   min-height: 100dvh;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   padding-bottom: env(safe-area-inset-bottom, 20px);
 }
 
 /* Custom scrollbar for mobile strips */
-.hide-scrollbar::-webkit-scrollbar {
+.hide-scrollbar::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-.hide-scrollbar {
+.hide-scrollbar,
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-/* Glassmorphism helpers */
+/* Frosted bars (sticky headers, bottom navigation) */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-.dark .glass-panel {
-  background: rgba(17, 24, 39, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(31, 41, 61, 0.8);
+  background: rgba(255, 253, 249, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #E2DDCF;
 }
 
 /* Animations */
@@ -97,4 +82,155 @@ body {
 
 .animate-pulse-subtle {
   animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Motion: buttons feel like physical keys, choices pop, results get stamped.
+   Everything here is transform/opacity only and switches off for reduced motion.
+   ========================================================================== */
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Primary "key": a hard edge underneath that the button sinks into on press */
+.m-key {
+  box-shadow: 0 3px 0 rgba(8, 22, 13, 0.42);
+  transition: transform 0.14s var(--m-out), box-shadow 0.14s var(--m-out), background-color 0.2s ease-out, color 0.2s ease-out, filter 0.2s ease-out;
+}
+.m-key:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 rgba(8, 22, 13, 0.42);
+}
+.m-key2 {
+  box-shadow: 0 2px 0 #CFC8B6;
+  transition: transform 0.14s var(--m-out), box-shadow 0.14s var(--m-out), background-color 0.2s ease-out, border-color 0.2s ease-out;
+}
+.m-key2:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #CFC8B6;
+}
+@media (hover: hover) {
+  .m-key:hover:not(:disabled) { filter: brightness(1.08); }
+  .m-key2:hover:not(:disabled) { border-color: #A3A89F; }
+}
+
+/* Small press for everything else that is tappable */
+.m-press {
+  transition: transform 0.14s var(--m-out), background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s ease-out;
+}
+.m-press:active:not(:disabled) { transform: scale(0.97); }
+
+/* Selected chips (time slots, days, filters) pop into place */
+.m-chip[aria-pressed="true"],
+.m-chip[aria-checked="true"],
+.m-chip[data-on="true"] {
+  animation: m-pop 0.34s var(--m-spring);
+}
+@keyframes m-pop {
+  0% { transform: scale(0.88); }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* Success stamp: the button turns lime and bounces once */
+.m-stamp {
+  background: #CFEA6E !important;
+  color: #1A2E12 !important;
+  animation: m-stamp 0.45s var(--m-spring);
+}
+@keyframes m-stamp {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.9); }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* A check mark that draws itself */
+.m-draw path {
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  animation: m-draw 0.4s 0.08s var(--m-out) forwards;
+}
+@keyframes m-draw { to { stroke-dashoffset: 0; } }
+
+/* Spinner used inside buttons while saving */
+.m-spin {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 253, 249, 0.3);
+  border-top-color: #CFEA6E;
+  animation: m-rot 0.7s linear infinite;
+}
+.m-spin-dark {
+  border-color: rgba(23, 32, 26, 0.18);
+  border-top-color: #1E4D36;
+}
+@keyframes m-rot { to { transform: rotate(360deg); } }
+
+/* The appointment ticket "prints" in */
+.m-print { animation: m-print 0.6s 0.12s var(--m-out) both; }
+@keyframes m-print {
+  from { clip-path: inset(0 0 100% 0); transform: translateY(-12px); }
+  to { clip-path: inset(0 0 0 0); transform: none; }
+}
+
+/* Toasts and banners rise in */
+.m-toast { animation: m-rise 0.42s var(--m-spring); }
+@keyframes m-rise {
+  from { transform: translateY(28px) scale(0.96); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Active tab icon hops; the center plus turns when pressed */
+.m-tab[aria-current="page"] svg { animation: m-hop 0.45s var(--m-spring); }
+@keyframes m-hop {
+  0% { transform: none; }
+  40% { transform: translateY(-5px) scale(1.12); }
+  100% { transform: none; }
+}
+.m-fab svg { transition: transform 0.32s var(--m-spring); }
+.m-fab[aria-expanded="true"] svg,
+.m-fab:active svg { transform: rotate(90deg); }
+
+/* Ticket edge: half-circle notches cut into the sides */
+.m-ticket { position: relative; }
+.m-ticket::before,
+.m-ticket::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--notch, #F4F1E8);
+}
+.m-ticket::before { right: -8px; }
+.m-ticket::after { left: -8px; }
+
+/* Lightweight versions of the enter utilities used across the screens */
+.animate-in { animation: m-enter 0.24s var(--m-out) both; }
+.animate-in.slide-in-from-bottom,
+.animate-in.slide-in-from-bottom-3 { animation-name: m-enter-up; }
+.animate-in.slide-in-from-top { animation-name: m-enter-down; }
+.animate-in.zoom-in-95,
+.animate-in.zoom-in-75 { animation-name: m-enter-zoom; }
+@keyframes m-enter { from { opacity: 0; transform: translateY(6px); } }
+@keyframes m-enter-up { from { opacity: 0; transform: translateY(24px); } }
+@keyframes m-enter-down { from { opacity: 0; transform: translateY(-12px); } }
+@keyframes m-enter-zoom { from { opacity: 0; transform: scale(0.95); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .m-draw path { stroke-dashoffset: 0; }
 }
