@@ -18,6 +18,7 @@ import {
   unauthorized,
   verifyGoogleAccessToken,
 } from "@/lib/auth";
+import { isPasswordPwned, PWNED_ERROR } from "@/lib/pwned";
 import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 import { sanitizeDateOverrides, sanitizeSettings, sanitizeWorkingHours } from "@/lib/validation";
 
@@ -77,6 +78,9 @@ export async function PATCH(request: NextRequest) {
     if (password !== undefined) {
       if (typeof password !== "string" || !validatePassword(password).isValid) {
         return NextResponse.json({ error: PASSWORD_ERROR }, { status: 400 });
+      }
+      if (await isPasswordPwned(password)) {
+        return NextResponse.json({ error: PWNED_ERROR }, { status: 400 });
       }
     }
     if (name !== undefined && (typeof name !== "string" || name.trim().length < 1 || name.length > 120)) {
@@ -164,6 +168,9 @@ export async function POST(request: NextRequest) {
       }
       if (!validatePassword(password).isValid) {
         return NextResponse.json({ error: PASSWORD_ERROR }, { status: 400 });
+      }
+      if (await isPasswordPwned(password)) {
+        return NextResponse.json({ error: PWNED_ERROR }, { status: 400 });
       }
     }
 

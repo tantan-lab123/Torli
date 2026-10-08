@@ -11,8 +11,9 @@ const UUID_RE = /^[A-Za-z0-9-]{6,64}$/; // uuid in prod, short ids in mock mode
 // reminder). Public callers only get the minimum needed for the cancel page.
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  ctx: { params: Promise<{ id: string }> }
 ) {
+  const params = await ctx.params;
   if (!rateLimit(`appt-get:${clientIp(request)}`, 60, 10 * 60 * 1000)) return tooMany();
   if (!UUID_RE.test(params.id)) {
     return NextResponse.json({ error: "התור לא נמצא" }, { status: 404 });
@@ -45,9 +46,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  ctx: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await ctx.params;
     if (!rateLimit(`appt-patch:${clientIp(request)}`, 30, 10 * 60 * 1000)) return tooMany();
     if (!UUID_RE.test(params.id)) {
       return NextResponse.json({ error: "התור לא נמצא" }, { status: 404 });

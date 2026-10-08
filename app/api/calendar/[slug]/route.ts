@@ -22,11 +22,11 @@ function escapeIcsText(text: string): string {
 
 // Private subscription feed: requires the owner's secret ?t= token
 // (shown only inside the logged-in admin). Contains client names and phones.
-export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   try {
     if (!rateLimit(`ics:${clientIp(request)}`, 60, 10 * 60 * 1000)) return tooMany();
 
-    const slug = params.slug;
+    const { slug } = await ctx.params;
     const business = await getBusinessBySlug(slug);
 
     // Same response for "no such business" and "bad token": no slug enumeration.

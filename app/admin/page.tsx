@@ -1166,13 +1166,15 @@ export default function AdminDashboardPage() {
                 </Button>
               </form>
 
-              {/* Quick demo helper banner */}
+              {/* Demo credentials: development only, never shown in production */}
+              {process.env.NODE_ENV !== "production" && (
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs text-slate-500 space-y-1 text-right">
                 <span className="font-bold text-slate-700 block">עסקי הדגמה מוכנים מראש:</span>
                 <div>• מספרת דניאל: טלפון <span className="font-mono font-bold text-slate-800">0541234567</span> | סיסמה: <span className="font-mono font-bold text-slate-800">BarberDan2026!</span></div>
                 <div>• סטודיו מיה: טלפון <span className="font-mono font-bold text-slate-800">0529876543</span> | סיסמה: <span className="font-mono font-bold text-slate-800">MayaNails2026!</span></div>
                 <div>• קליניקת רפאל: טלפון <span className="font-mono font-bold text-slate-800">0505556677</span> | סיסמה: <span className="font-mono font-bold text-slate-800">RafaelClinic2026!</span></div>
               </div>
+              )}
             </Card>
           )}
 
