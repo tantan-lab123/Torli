@@ -41,16 +41,16 @@ export const MarketingSection: React.FC<MarketingSectionProps> = ({
   return (
     <div className="space-y-4">
       {/* "Coming Soon" Banner for Marketing SMS/WhatsApp as user instructed */}
-      <div className="p-4 rounded-2xl bg-gradient-to-l from-indigo-900 to-indigo-950 text-white shadow-md relative overflow-hidden border border-indigo-800">
+      <div className="p-4 rounded-xl bg-brand-700 text-white relative overflow-hidden">
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-right">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-900 uppercase">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-lime text-lime-ink">
                 בקרוב - בהפעלה
               </span>
               <h2 className="text-base font-black text-white">מודול הודעות וקמפיינים (SMS & WhatsApp)</h2>
             </div>
-            <p className="text-xs text-indigo-200/90 leading-relaxed max-w-xl">
+            <p className="text-xs text-brand-100 leading-relaxed max-w-xl">
               עמוד ההודעות נמצא כעת בהרצה סגורה. חיבור שרתי ה-SMS וה-WhatsApp הישירים נמצא בהפעלה ויהיה זמין לשימוש מלא בעדכון הקרוב.
             </p>
           </div>
@@ -75,7 +75,7 @@ export const MarketingSection: React.FC<MarketingSectionProps> = ({
 
           <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all"
+              className="h-full bg-brand-600 rounded-full transition-all"
               style={{ width: `${Math.round((quotaUsed / quotaTotal) * 100)}%` }}
             />
           </div>

@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Sparkles,
   AlertCircle,
-  Lock,
   CalendarX,
   Palmtree,
   KeyRound,
@@ -82,6 +81,7 @@ import {
 import { he } from "date-fns/locale";
 import { AdminTopBar, AdminTab } from "@/components/admin/AdminTopBar";
 import { NextUpTicket } from "@/components/admin/NextUpTicket";
+import { Logo } from "@/components/brand/Logo";
 import { AdminFAB } from "@/components/admin/AdminFAB";
 import { CustomersSection } from "@/components/admin/CustomersSection";
 import { StatsSection } from "@/components/admin/StatsSection";
@@ -1074,50 +1074,52 @@ export default function AdminDashboardPage() {
   // =========================================================================
   if (!selectedBusiness) {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4">
+      <div className="min-h-screen bg-paper flex flex-col justify-center items-center p-4">
         <div className="max-w-md w-full space-y-6">
-          {/* SaaS Branding Header */}
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-3xl bg-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-extrabold text-slate-900">
-              כניסה פרטית לבעלי עסקים
+          {/* Brand header */}
+          <div className="text-center space-y-3">
+            <Logo size={40} className="justify-center" />
+            <h1 className="text-2xl font-extrabold text-ink-900">
+              כניסה לבעלי עסקים
             </h1>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto">
-              התחבר לחשבון העסק שלך באופן פרטי ומאובטח או פתח חשבון עסק חדש
+            <p className="text-sm text-ink-600 max-w-xs mx-auto">
+              היומן, הלקוחות וההגדרות של העסק שלך, במקום אחד
             </p>
           </div>
 
           {/* Tab Switcher: Login / Register */}
-          <div className="flex bg-slate-200 p-1 rounded-2xl">
+          <div role="tablist" className="flex bg-ink-100 border border-ink-200 p-1 rounded-lg">
             <button
               onClick={() => {
                 setAuthTab("login");
                 setLoginError("");
               }}
+              role="tab"
+              aria-selected={authTab === "login"}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "m-press flex-1 h-11 rounded-md text-sm font-bold",
                 authTab === "login"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-ink-600 hover:text-ink-900"
               )}
             >
-              התחברות לעסק שלי
+              כניסה
             </button>
             <button
               onClick={() => {
                 setAuthTab("register");
                 setRegError("");
               }}
+              role="tab"
+              aria-selected={authTab === "register"}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all",
+                "m-press flex-1 h-11 rounded-md text-sm font-bold",
                 authTab === "register"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-ink-600 hover:text-ink-900"
               )}
             >
-              הרשמת עסק חדש 🚀
+              עסק חדש
             </button>
           </div>
 
@@ -1301,7 +1303,7 @@ export default function AdminDashboardPage() {
 
               {/* 1-Tap Google Registration / Connected Status */}
               {googleUser ? (
-                <div className="p-4 rounded-2xl bg-gradient-to-l from-emerald-50 to-teal-50 border border-emerald-200 text-right space-y-2.5 shadow-xs">
+                <div className="p-4 rounded-xl bg-success-50 border border-success-200 text-right space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
@@ -1549,7 +1551,7 @@ export default function AdminDashboardPage() {
                   <Sparkles className="w-4 h-4 ml-2" />
                   <span>
                     {googleUser
-                      ? "המשך להגדרת שעות פעילות 🚀"
+                      ? "המשך להגדרת שעות פעילות"
                       : "המשך להגדרת שעות פעילות"}
                   </span>
                 </Button>
@@ -1576,17 +1578,17 @@ export default function AdminDashboardPage() {
     };
 
     return (
-      <div className="min-h-screen bg-slate-50 py-10 px-4">
+      <div className="min-h-screen bg-paper py-10 px-4">
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
           {/* Header */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 px-3.5 py-1 rounded-full text-xs font-black shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 bg-lime text-lime-ink px-3 py-1 rounded text-xs font-bold">
               <span>שלב 2 מתוך 2</span>
               <span>•</span>
               <span>הגדרת שעות פתיחה לעסק</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-              ברוך הבא ל-Torli, {selectedBusiness.name}! 🎉
+              ברוך הבא ל-Torli, {selectedBusiness.name}
             </h1>
             <p className="text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
               העסק נוצר בהצלחה! כעת בחר באילו ימים ושעות העסק שלך יהיה פתוח לקבלת תורים מלקוחות.
@@ -1594,7 +1596,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Weekly Schedule Card */}
-          <Card className="p-6 bg-white border border-slate-200 shadow-sm rounded-3xl space-y-5 text-right">
+          <Card className="p-6 space-y-5 text-right">
             {/* Preset shortcuts */}
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-500">תבניות מהירות:</span>
@@ -1749,7 +1751,7 @@ export default function AdminDashboardPage() {
                 className="w-full sm:w-auto shadow-lg shadow-indigo-600/25 px-8"
               >
                 <Sparkles className="w-4 h-4 ml-2" />
-                <span>שמור שעות והיכנס ליומן 🚀</span>
+                <span>שמירה וכניסה ליומן</span>
               </Button>
             </div>
           </Card>
@@ -2615,7 +2617,7 @@ export default function AdminDashboardPage() {
             />
 
             {/* Cron Reminders Tester Card */}
-            <Card className="p-5 space-y-3 bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100 text-right">
+            <Card className="p-5 space-y-3 text-right">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0">
                   <Send className="w-5 h-5" />

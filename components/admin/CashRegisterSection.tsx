@@ -53,11 +53,11 @@ export const CashRegisterSection: React.FC<CashRegisterSectionProps> = ({
   return (
     <div className="space-y-4">
       {/* "Coming Soon" Banner for Credit Card Terminals as user instructed */}
-      <div className="p-4 rounded-2xl bg-gradient-to-l from-indigo-900 to-indigo-950 text-white shadow-md relative overflow-hidden border border-indigo-800">
+      <div className="p-4 rounded-xl bg-brand-700 text-white relative overflow-hidden">
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-right">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-900 uppercase">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-lime text-lime-ink">
                 בקרוב - בהפעלה
               </span>
               <h2 className="text-base font-black">מודול סליקה וקופה דיגיטלית</h2>
