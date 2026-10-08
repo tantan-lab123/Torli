@@ -127,8 +127,11 @@ export const AdminFAB: React.FC<AdminFABProps> = ({
         >
           {isOpen ? <X className="w-6 h-6" /> : <Plus className="w-7 h-7" strokeWidth={2.4} />}
         </button>
-        <span className="md:hidden -mt-1.5 text-[11px] font-semibold text-brand-600 pointer-events-none" aria-hidden="true">
-          {isOpen ? "" : "תור חדש"}
+        <span
+          className={cn("md:hidden -mt-1.5 text-[11px] font-semibold text-brand-600 pointer-events-none", isOpen && "invisible")}
+          aria-hidden="true"
+        >
+          תור חדש
         </span>
       </div>
     </>

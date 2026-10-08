@@ -87,6 +87,8 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ["var(--font-brand)", "var(--font-heebo)", "system-ui", "sans-serif"],
+        // Phone numbers and links read better in the brand font with tabular digits.
+        mono: ["var(--font-brand)", "var(--font-heebo)", "ui-monospace", "monospace"],
       },
       colors: {
         brand,
