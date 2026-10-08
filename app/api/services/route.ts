@@ -7,7 +7,8 @@ import {
   updateService,
   deleteService,
 } from "@/lib/db";
-import { forbidden, getSessionBusinessId, unauthorized } from "@/lib/auth";
+import { forbidden } from "@/lib/auth";
+import { requireRole, MANAGEMENT } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const businessId = getSessionBusinessId(request);
-    if (!businessId) return unauthorized();
+    const auth = await requireRole(request, MANAGEMENT);
+    if (auth.error) return auth.error;
+    const businessId = auth.session.businessId;
 
     const parsed = createSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -55,8 +57,9 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const businessId = getSessionBusinessId(request);
-    if (!businessId) return unauthorized();
+    const auth = await requireRole(request, MANAGEMENT);
+    if (auth.error) return auth.error;
+    const businessId = auth.session.businessId;
 
     const parsed = updateSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -80,8 +83,9 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const businessId = getSessionBusinessId(request);
-    if (!businessId) return unauthorized();
+    const auth = await requireRole(request, MANAGEMENT);
+    if (auth.error) return auth.error;
+    const businessId = auth.session.businessId;
 
     const id = request.nextUrl.searchParams.get("id");
     if (!id) return NextResponse.json({ error: "חסר מזהה שירות" }, { status: 400 });

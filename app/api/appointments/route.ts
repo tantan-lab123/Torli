@@ -8,6 +8,8 @@ import {
   createAppointment,
   blockTimeSlot,
   upsertCustomerProfile,
+  getStaffById,
+  setAppointmentStaff,
 } from "@/lib/db";
 import {
   addMinutes,
@@ -19,7 +21,11 @@ import {
   isSameWeek,
   isSameMonth,
 } from "date-fns";
-import { forbidden, getSessionBusinessId, unauthorized, verifyGoogleAccessToken } from "@/lib/auth";
+import { after } from "next/server";
+import { forbidden, getSessionBusinessId, verifyGoogleAccessToken } from "@/lib/auth";
+import { requireRole, ANY_ROLE } from "@/lib/access";
+import { notifyBusiness } from "@/lib/push";
+import { formatHebrewDate, formatTime } from "@/lib/utils";
 import { generateAvailableSlots, israelDateString } from "@/lib/booking/slotGenerator";
 import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
 
@@ -45,6 +51,8 @@ const bookingSchema = z.object({
   notes: z.string().max(500, "ההערה ארוכה מדי").optional(),
   // Supabase access token of a customer who signed in with Google (identity is verified server-side)
   access_token: z.string().max(4000).optional(),
+  // only honoured for logged-in staff/owner (manual bookings)
+  staff_id: z.string().max(64).optional(),
 });
 
 const blockSlotSchema = z.object({
@@ -54,10 +62,11 @@ const blockSlotSchema = z.object({
   reason: z.string().max(120).default("הפסקה / סידורים"),
 });
 
-/** Owner-only: the appointment book with client details. */
+/** Logged-in team only: the appointment book with client details. */
 export async function GET(request: NextRequest) {
-  const sessionId = getSessionBusinessId(request);
-  if (!sessionId) return unauthorized();
+  const auth = await requireRole(request, ANY_ROLE);
+  if (auth.error) return auth.error;
+  const sessionId = auth.session.businessId;
 
   const { searchParams } = request.nextUrl;
   const businessId = searchParams.get("business_id");
@@ -80,8 +89,9 @@ export async function POST(request: NextRequest) {
 
     // Owner blocks a time range
     if (body.is_block) {
-      const sessionId = getSessionBusinessId(request);
-      if (!sessionId) return unauthorized();
+      const auth = await requireRole(request, ANY_ROLE);
+      if (auth.error) return auth.error;
+      const sessionId = auth.session.businessId;
       const parsedBlock = blockSlotSchema.safeParse(body);
       if (!parsedBlock.success) {
         return NextResponse.json(
@@ -97,9 +107,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, appointment: blocked });
     }
 
-    // Public booking
+    // Booking (public customers, or the business team adding one manually)
     const ip = clientIp(request);
-    if (!rateLimit(`book:ip:${ip}`, 10, 60 * 60 * 1000)) return tooMany();
+    const teamSessionId = getSessionBusinessId(request);
+    const isTeam = teamSessionId !== null && teamSessionId === body?.business_id;
+    if (!isTeam && !rateLimit(`book:ip:${ip}`, 10, 60 * 60 * 1000)) return tooMany();
 
     const parsed = bookingSchema.safeParse(body);
     if (!parsed.success) {
@@ -121,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
       email = google.email;
     }
-    if (!rateLimit(`book:phone:${phone}`, 5, 60 * 60 * 1000)) return tooMany();
+    if (!isTeam && !rateLimit(`book:phone:${phone}`, 5, 60 * 60 * 1000)) return tooMany();
 
     const business = await getBusinessById(business_id);
     if (!business) {
@@ -143,10 +155,10 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const minNoticeHours = business.settings?.min_notice_hours ?? 0;
     const maxFutureDays = business.settings?.max_future_days ?? 365;
-    if (isBefore(slotStart, addMinutes(now, Math.round(minNoticeHours * 60)))) {
+    if (!isTeam && isBefore(slotStart, addMinutes(now, Math.round(minNoticeHours * 60)))) {
       return NextResponse.json({ error: "לא ניתן לקבוע תור למועד זה" }, { status: 400 });
     }
-    if (isAfter(slotStart, addDays(now, maxFutureDays))) {
+    if (!isTeam && isAfter(slotStart, addDays(now, maxFutureDays))) {
       return NextResponse.json({ error: "לא ניתן לקבוע תור רחוק כל כך קדימה" }, { status: 400 });
     }
 
@@ -159,7 +171,11 @@ export async function POST(request: NextRequest) {
       existingAppointments: await getAppointments(business_id),
       stepMinutes: business.slot_interval_minutes || 15,
     });
-    if (!offered.slots.some((sl) => new Date(sl.startTime).getTime() === slotStart.getTime())) {
+    // (the business team may deliberately book outside the offered grid; collisions are still blocked)
+    if (
+      !isTeam &&
+      !offered.slots.some((sl) => new Date(sl.startTime).getTime() === slotStart.getTime())
+    ) {
       return NextResponse.json(
         { error: "השעה שנבחרה אינה זמינה. אנא בחר מועד אחר." },
         { status: 409 }
@@ -203,13 +219,13 @@ export async function POST(request: NextRequest) {
           )
         : null;
 
-    const dayLimit = tooMuch(
+    const dayLimit = isTeam ? null : tooMuch(
       business.settings?.max_appointments_per_day ?? 0,
       "ליום אחד",
       clientActiveAppointments.filter((a) => isSameDay(parseISO(a.start_time), slotStart)).length
     );
     if (dayLimit) return dayLimit;
-    const weekLimit = tooMuch(
+    const weekLimit = isTeam ? null : tooMuch(
       business.settings?.max_appointments_per_week ?? 0,
       "לשבוע אחד",
       clientActiveAppointments.filter((a) =>
@@ -217,7 +233,7 @@ export async function POST(request: NextRequest) {
       ).length
     );
     if (weekLimit) return weekLimit;
-    const monthLimit = tooMuch(
+    const monthLimit = isTeam ? null : tooMuch(
       business.settings?.max_appointments_per_month ?? 0,
       "לחודש",
       clientActiveAppointments.filter((a) => isSameMonth(parseISO(a.start_time), slotStart)).length
@@ -232,6 +248,25 @@ export async function POST(request: NextRequest) {
       end_time: slotEndIso,
       notes,
     });
+
+    // Manual booking by the team may be assigned to an employee of the same business
+    if (isTeam && parsed.data.staff_id) {
+      const st = await getStaffById(parsed.data.staff_id);
+      if (st && st.business_id === business_id) {
+        await setAppointmentStaff(appointment.id, st.id);
+      }
+    }
+
+    // Free browser push to the owner's devices (does not delay the response)
+    if (!isTeam) {
+      after(() =>
+        notifyBusiness(business_id, {
+          title: "תור חדש נקבע 🎉",
+          body: `${first_name} ${last_name} · ${service.name} · ${formatHebrewDate(appointment.start_time)} ${formatTime(appointment.start_time)}`,
+          url: "/admin",
+        })
+      );
+    }
 
     // Remember a Google customer's details so the next booking is one tap
     if (google) {

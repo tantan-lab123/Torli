@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { BackupAndAlerts } from "@/components/admin/BackupAndAlerts";
 import { triggerHaptic } from "@/lib/utils";
 
 /**
@@ -69,6 +70,7 @@ interface SettingsSectionProps {
   slotInterval: number;
   onUpdateSettings: (settings: Partial<Business>) => Promise<void>;
   onDeleteBusiness?: () => Promise<void>;
+  role?: "owner" | "manager" | "staff";
 }
 
 export const SettingsSection: React.FC<SettingsSectionProps> = ({
@@ -76,6 +78,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   slotInterval,
   onUpdateSettings,
   onDeleteBusiness,
+  role = "owner",
 }) => {
   const [subTab, setSubTab] = useState<"general" | "controls" | "qrcode" | "sync">("general");
   const [copiedSyncUrl, setCopiedSyncUrl] = useState(false);
@@ -86,6 +89,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   // General profile state
   const [name, setName] = useState(business.name);
   const [phone, setPhone] = useState(business.owner_phone);
+  const [ownerEmail, setOwnerEmail] = useState(business.owner_email || "");
   const [address, setAddress] = useState(business.settings?.address || "רוטשילד 15, תל אביב");
   const [whatsapp, setWhatsapp] = useState(business.settings?.whatsapp_phone || business.owner_phone);
   const [instagram, setInstagram] = useState(business.settings?.instagram_url || "");
@@ -117,6 +121,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   useEffect(() => {
     setName(business.name);
     setPhone(business.owner_phone);
+    setOwnerEmail(business.owner_email || "");
     setAddress(business.settings?.address || "רוטשילד 15, תל אביב");
     setWhatsapp(business.settings?.whatsapp_phone || business.owner_phone);
     setInstagram(business.settings?.instagram_url || "");
@@ -203,6 +208,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
       await onUpdateSettings({
         name: name.trim(),
         owner_phone: phone.trim(),
+        ...(role === "owner" && ownerEmail.trim() ? { owner_email: ownerEmail.trim() } : {}),
         slot_interval_minutes: Number(interval),
         settings: updatedSettings,
       });
@@ -342,6 +348,18 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                 onChange={(e) => setPhone(e.target.value)}
                 required
               />
+
+              {role === "owner" && (
+                <Input
+                  label="אימייל לשחזור סיסמה"
+                  type="email"
+                  dir="ltr"
+                  placeholder="owner@example.com"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  helperText="אם תשכח סיסמה, נשלח לכאן קישור לאיפוס. מומלץ להגדיר."
+                />
+              )}
 
               <Input
                 label="מספר וואטסאפ ייעודי להודעות"
@@ -879,6 +897,8 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           );
         })()}
       </form>
+
+      <BackupAndAlerts />
 
       {/* Danger Zone: Permanent Business Deletion */}
       {onDeleteBusiness && (

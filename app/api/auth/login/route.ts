@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getBusinessByPhone,
+  getBusinessById,
   findBusinessByVerifiedGoogle,
+  getStaffByPhone,
   setBusinessPasswordHash,
 } from "@/lib/db";
 import {
@@ -34,12 +36,12 @@ export async function POST(request: NextRequest) {
       if (!business) {
         return NextResponse.json({ error: "לא נמצא חשבון מקושר ל-Google זה" }, { status: 404 });
       }
-      const res = NextResponse.json({ success: true, business: toOwnerBusiness(business) });
-      setSessionCookie(res, business.id);
+      const res = NextResponse.json({ success: true, role: "owner", business: toOwnerBusiness(business) });
+      setSessionCookie(res, business.id, "owner");
       return res;
     }
 
-    // Credentials login (phone + password)
+    // Credentials login (phone + password): business owner first, then staff members
     const { phone, password } = body;
     if (typeof phone !== "string" || typeof password !== "string" || !phone || !password) {
       return NextResponse.json({ error: "יש להזין מספר טלפון וסיסמה" }, { status: 400 });
@@ -48,17 +50,33 @@ export async function POST(request: NextRequest) {
     if (!rateLimit(`login:phone:${digits}`, 6, FIFTEEN_MIN)) return tooMany();
 
     const business = await getBusinessByPhone(digits);
-    const check = verifyPassword(password, business?.password);
-    if (!business || !check.ok) {
-      return NextResponse.json({ error: "מספר טלפון או סיסמה אינם נכונים" }, { status: 401 });
-    }
-    if (check.needsRehash) {
-      await setBusinessPasswordHash(business.id, hashPassword(password));
+    const ownerCheck = verifyPassword(password, business?.password);
+    if (business && ownerCheck.ok) {
+      if (ownerCheck.needsRehash) {
+        await setBusinessPasswordHash(business.id, hashPassword(password));
+      }
+      const res = NextResponse.json({ success: true, role: "owner", business: toOwnerBusiness(business) });
+      setSessionCookie(res, business.id, "owner");
+      return res;
     }
 
-    const res = NextResponse.json({ success: true, business: toOwnerBusiness(business) });
-    setSessionCookie(res, business.id);
-    return res;
+    const staff = await getStaffByPhone(digits);
+    const staffCheck = verifyPassword(password, staff?.password);
+    if (staff && staff.active && staffCheck.ok) {
+      const staffBusiness = await getBusinessById(staff.business_id);
+      if (staffBusiness) {
+        const res = NextResponse.json({
+          success: true,
+          role: staff.role,
+          staff: { id: staff.id, name: staff.name },
+          business: toOwnerBusiness(staffBusiness, staff.role),
+        });
+        setSessionCookie(res, staffBusiness.id, staff.role, staff.id);
+        return res;
+      }
+    }
+
+    return NextResponse.json({ error: "מספר טלפון או סיסמה אינם נכונים" }, { status: 401 });
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json({ error: "שגיאת שרת במהלך ההתחברות" }, { status: 500 });

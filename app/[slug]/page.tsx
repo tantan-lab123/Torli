@@ -85,6 +85,11 @@ export default function BookingPage() {
   const [clientEmail, setClientEmail] = useState("");
   const [isGoogleClient, setIsGoogleClient] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Waiting list for a fully booked day
+  const [waitOpen, setWaitOpen] = useState(false);
+  const [waitBusy, setWaitBusy] = useState(false);
+  const [waitMsg, setWaitMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [notes, setNotes] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [isClientLookupLoading, setIsClientLookupLoading] = useState(false);
@@ -242,6 +247,52 @@ export default function BookingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !selectedService) return;
+    const phoneCheck = validatePhoneNumber(phone);
+    if (!phoneCheck.isValid) {
+      setWaitMsg({ ok: false, text: phoneCheck.error || "מספר טלפון לא תקין" });
+      return;
+    }
+    if (firstName.trim().length < 2 || lastName.trim().length < 2) {
+      setWaitMsg({ ok: false, text: "יש להזין שם פרטי ושם משפחה" });
+      return;
+    }
+    setWaitBusy(true);
+    setWaitMsg(null);
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          business_id: business.id,
+          service_id: selectedService.id,
+          phone: phoneCheck.cleaned,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          desired_date: format(selectedDate, "yyyy-MM-dd"),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setWaitMsg({ ok: false, text: data.error || "לא הצלחנו להוסיף אותך לרשימה" });
+      } else {
+        setWaitMsg({
+          ok: true,
+          text: data.duplicate
+            ? "אתה כבר ברשימת ההמתנה ליום הזה. נעדכן אותך אם יתפנה תור."
+            : "נוספת לרשימת ההמתנה! אם יתפנה תור ביום הזה, בית העסק ייצור איתך קשר.",
+        });
+        triggerHaptic(40);
+      }
+    } catch {
+      setWaitMsg({ ok: false, text: "שגיאת תקשורת. אנא נסה שוב." });
+    } finally {
+      setWaitBusy(false);
+    }
+  };
+
   // Start Google sign-in; the booking progress survives the redirect via sessionStorage
   const handleGoogleSignIn = async () => {
     if (!supabase || !selectedService || !selectedSlot) return;
@@ -319,6 +370,8 @@ export default function BookingPage() {
     triggerHaptic(15);
     setSelectedDate(date);
     setSelectedSlot(null);
+    setWaitOpen(false);
+    setWaitMsg(null);
 
     // If day is from another month, navigate to it
     if (!isSameMonth(date, currentMonth)) {
@@ -940,6 +993,51 @@ export default function BookingPage() {
                 <p className="text-xs text-slate-500 max-w-xs mx-auto">
                   אנא בחר יום אחר מהרשימה שלמעלה כדי למצוא שעה נוחה
                 </p>
+
+                {business.settings?.waiting_list_enabled !== false &&
+                  (monthAvailability[format(selectedDate, "yyyy-MM-dd")]?.isOpen ?? false) && (
+                    <div className="mt-4 text-right">
+                      {!waitOpen ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setWaitMsg(null);
+                            setWaitOpen(true);
+                          }}
+                        >
+                          הצטרף לרשימת המתנה ליום זה
+                        </Button>
+                      ) : (
+                        <form onSubmit={handleJoinWaitlist} className="space-y-3 bg-slate-50 rounded-2xl border border-slate-200 p-3">
+                          <p className="text-xs text-slate-600">
+                            נעדכן את בית העסק, ואם יתפנה תור ביום הזה הוא ייצור איתך קשר.
+                          </p>
+                          <Input
+                            label="מספר טלפון נייד *"
+                            type="tel"
+                            dir="ltr"
+                            className="text-right"
+                            value={phone}
+                            onChange={handlePhoneChange}
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input label="שם פרטי *" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                            <Input label="שם משפחה *" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                          </div>
+                          {waitMsg && (
+                            <p className={`text-xs font-bold ${waitMsg.ok ? "text-emerald-700" : "text-rose-600"}`}>
+                              {waitMsg.text}
+                            </p>
+                          )}
+                          <Button type="submit" className="w-full" disabled={waitBusy || waitMsg?.ok === true}>
+                            {waitBusy ? "מוסיף..." : "הוסף אותי לרשימה"}
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+                  )}
               </div>
             ) : (
               <div className="space-y-4">

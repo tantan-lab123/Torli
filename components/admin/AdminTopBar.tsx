@@ -35,6 +35,8 @@ interface AdminTopBarProps {
   activeTab: AdminTab;
   onTabChange: (tab: AdminTab) => void;
   onLogout: () => void;
+  role?: "owner" | "manager" | "staff";
+  staffName?: string;
 }
 
 export const ADMIN_NAV_ITEMS: {
@@ -59,7 +61,15 @@ export const AdminTopBar: React.FC<AdminTopBarProps> = ({
   activeTab,
   onTabChange,
   onLogout,
+  role = "owner",
+  staffName,
 }) => {
+  // The server enforces permissions; this just hides what the person cannot use.
+  const items = ADMIN_NAV_ITEMS.filter((i) => {
+    if (role === "staff") return i.id === "calendar" || i.id === "customers";
+    if (role === "manager") return i.id !== "employees";
+    return true;
+  });
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       {/* Top row: Brand & Actions */}
@@ -71,6 +81,11 @@ export const AdminTopBar: React.FC<AdminTopBarProps> = ({
           <div className="text-right">
             <div className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight flex items-center gap-2">
               <span>{business.name}</span>
+              {role !== "owner" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {staffName ? `${staffName} · ` : ""}{role === "manager" ? "מנהל" : "עובד"}
+                </span>
+              )}
               <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 פעיל
               </span>
@@ -118,7 +133,7 @@ export const AdminTopBar: React.FC<AdminTopBarProps> = ({
       <div className="border-t border-slate-100 bg-slate-50/60">
         <div className="max-w-7xl mx-auto px-2 sm:px-4">
           <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1.5 text-xs">
-            {ADMIN_NAV_ITEMS.map((item) => {
+            {items.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (

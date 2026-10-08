@@ -35,34 +35,61 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 // ---------------------------------------------------------------- sessions
-export function createSessionToken(businessId: string): string {
+export type Role = "owner" | "manager" | "staff";
+export interface Session {
+  businessId: string;
+  role: Role;
+  staffId?: string;
+}
+
+export function createSessionToken(businessId: string, role: Role = "owner", staffId?: string): string {
   const payload = Buffer.from(
-    JSON.stringify({ bid: businessId, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS })
+    JSON.stringify({
+      bid: businessId,
+      role,
+      ...(staffId ? { sid: staffId } : {}),
+      exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+    })
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
-export function verifySessionToken(token: string | undefined): string | null {
+export function verifySession(token: string | undefined): Session | null {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig || !safeEqual(sig, sign(payload))) return null;
   try {
-    const { bid, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
+    const { bid, exp, role, sid } = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (typeof bid !== "string" || typeof exp !== "number") return null;
     if (exp < Math.floor(Date.now() / 1000)) return null;
-    return bid;
+    // tokens issued before roles existed were owner logins
+    const r: Role = role === "manager" || role === "staff" ? role : "owner";
+    return { businessId: bid, role: r, ...(typeof sid === "string" ? { staffId: sid } : {}) };
   } catch {
     return null;
   }
 }
 
-/** Returns the business id of the logged-in owner, or null. */
-export function getSessionBusinessId(request: NextRequest): string | null {
-  return verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+export function verifySessionToken(token: string | undefined): string | null {
+  return verifySession(token)?.businessId ?? null;
 }
 
-export function setSessionCookie(res: NextResponse, businessId: string): void {
-  res.cookies.set(SESSION_COOKIE, createSessionToken(businessId), {
+export function getSession(request: NextRequest): Session | null {
+  return verifySession(request.cookies.get(SESSION_COOKIE)?.value);
+}
+
+/** Business id of ANY logged-in user (owner, manager or staff), or null. */
+export function getSessionBusinessId(request: NextRequest): string | null {
+  return getSession(request)?.businessId ?? null;
+}
+
+export function setSessionCookie(
+  res: NextResponse,
+  businessId: string,
+  role: Role = "owner",
+  staffId?: string
+): void {
+  res.cookies.set(SESSION_COOKIE, createSessionToken(businessId, role, staffId), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -121,9 +148,10 @@ export function verifyBearer(request: NextRequest, secret: string | undefined): 
 }
 
 // ------------------------------------------------------ Google (via Supabase)
-/** Verifies a Supabase Auth access token and returns the verified identity. */
-export async function verifyGoogleAccessToken(
-  accessToken: unknown
+/** Verifies a Supabase Auth access token (Google or email-link) and returns the verified identity. */
+export async function verifySupabaseToken(
+  accessToken: unknown,
+  provider: "google" | "email"
 ): Promise<{ email: string; id: string } | null> {
   if (typeof accessToken !== "string" || accessToken.length < 20) return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
@@ -133,8 +161,12 @@ export async function verifyGoogleAccessToken(
   const { data, error } = await client.auth.getUser(accessToken);
   const user = data?.user;
   if (error || !user?.email || !user.email_confirmed_at) return null;
-  if (user.app_metadata?.provider !== "google") return null;
+  if (user.app_metadata?.provider !== provider) return null;
   return { email: user.email.toLowerCase(), id: user.id };
+}
+
+export function verifyGoogleAccessToken(accessToken: unknown) {
+  return verifySupabaseToken(accessToken, "google");
 }
 
 // -------------------------------------------------------------- sanitizers
@@ -146,8 +178,9 @@ export function toPublicBusiness(b: Business): Business {
 }
 
 /** Fields for the logged-in owner: never the password hash / pin / google id. */
-export function toOwnerBusiness(b: Business): Business {
+export function toOwnerBusiness(b: Business, role: Role = "owner"): Business {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password, pin, google_id, ...rest } = b;
-  return { ...rest, calendar_token: calendarToken(b.id) } as Business;
+  // the calendar-feed secret is only for the owner and managers
+  return (role === "staff" ? rest : { ...rest, calendar_token: calendarToken(b.id) }) as Business;
 }

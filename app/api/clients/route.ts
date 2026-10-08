@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { addClientsBulk, getClientById, getClients, updateClientNotes } from "@/lib/db";
-import { forbidden, getSessionBusinessId, unauthorized } from "@/lib/auth";
+import { forbidden } from "@/lib/auth";
+import { requireRole, ANY_ROLE } from "@/lib/access";
 import { normalizeIsraeliMobile } from "@/lib/validation";
 import { rateLimit, tooMany } from "@/lib/rateLimit";
 
@@ -18,16 +19,18 @@ const contactSchema = z.object({
 
 /** Owner only: the business's saved customers. */
 export async function GET(request: NextRequest) {
-  const businessId = getSessionBusinessId(request);
-  if (!businessId) return unauthorized();
+  const auth = await requireRole(request, ANY_ROLE);
+  if (auth.error) return auth.error;
+  const businessId = auth.session.businessId;
   return NextResponse.json(await getClients(businessId));
 }
 
 /** Owner only: add one customer or import many (phone contacts / vCard / CSV). */
 export async function POST(request: NextRequest) {
   try {
-    const businessId = getSessionBusinessId(request);
-    if (!businessId) return unauthorized();
+    const auth = await requireRole(request, ANY_ROLE);
+    if (auth.error) return auth.error;
+    const businessId = auth.session.businessId;
     if (!rateLimit(`client-import:${businessId}`, 30, 60 * 60 * 1000)) return tooMany();
 
     const body = await request.json();
@@ -67,8 +70,9 @@ export async function POST(request: NextRequest) {
 /** Owner only: update a customer's internal notes. */
 export async function PATCH(request: NextRequest) {
   try {
-    const businessId = getSessionBusinessId(request);
-    if (!businessId) return unauthorized();
+    const auth = await requireRole(request, ANY_ROLE);
+    if (auth.error) return auth.error;
+    const businessId = auth.session.businessId;
 
     const body = await request.json();
     if (typeof body?.id !== "string" || typeof body?.notes !== "string" || body.notes.length > 2000) {

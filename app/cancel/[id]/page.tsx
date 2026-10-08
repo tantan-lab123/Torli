@@ -14,7 +14,19 @@ import { Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { formatHebrewDate, formatTime, triggerHaptic } from "@/lib/utils";
+import { formatHebrewDate, formatTime, toInternationalPhone, triggerHaptic } from "@/lib/utils";
+import { format, startOfToday } from "date-fns";
+
+interface Slot {
+  startTime: string;
+  formattedTime: string;
+}
+type Details = Appointment & {
+  can_modify?: boolean;
+  modify_blocked_reason?: string;
+  service_id?: string;
+  business_id?: string;
+};
 
 export default function CancelAppointmentPage() {
   const params = useParams();
@@ -26,6 +38,14 @@ export default function CancelAppointmentPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isCancelledSuccess, setIsCancelledSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
+
+  // Rescheduling
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveDate, setMoveDate] = useState(format(startOfToday(), "yyyy-MM-dd"));
+  const [moveSlots, setMoveSlots] = useState<Slot[]>([]);
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [moveMsg, setMoveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     const loadAppointment = async () => {
@@ -64,7 +84,12 @@ export default function CancelAppointmentPage() {
       });
 
       if (!res.ok) {
-        alert("שגיאה בביטול התור");
+        const data = await res.json().catch(() => ({}));
+        if (data.blocked) {
+          setBlockedReason(data.error);
+        } else {
+          alert(data.error || "שגיאה בביטול התור");
+        }
         setIsCancelling(false);
         return;
       }
@@ -76,6 +101,56 @@ export default function CancelAppointmentPage() {
       alert("שגיאה בביטול התור");
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const details = appointment as Details | null;
+
+  const loadMoveSlots = async (dateStr: string) => {
+    if (!details?.business_id || !details.service_id) return;
+    setMoveDate(dateStr);
+    setMoveLoading(true);
+    setMoveMsg(null);
+    try {
+      const res = await fetch(
+        `/api/slots?business_id=${details.business_id}&service_id=${details.service_id}&date=${dateStr}`
+      );
+      const data = res.ok ? await res.json() : { slots: [] };
+      setMoveSlots(data.slots || []);
+      if (!(data.slots || []).length) {
+        setMoveMsg({ ok: false, text: data.message || "אין שעות פנויות ביום הזה" });
+      }
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
+  const doMove = async (slot: Slot) => {
+    triggerHaptic(25);
+    setMoveLoading(true);
+    setMoveMsg(null);
+    try {
+      const res = await fetch(`/api/appointments/${appointmentId}/reschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_time: slot.startTime }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.blocked) setBlockedReason(data.error);
+        setMoveMsg({ ok: false, text: data.error || "לא הצלחנו לשנות את התור" });
+        return;
+      }
+      setAppointment((prev) =>
+        prev
+          ? { ...prev, start_time: data.appointment.start_time, end_time: data.appointment.end_time }
+          : prev
+      );
+      setMoveMsg({ ok: true, text: "התור הועבר בהצלחה!" });
+      setMoveOpen(false);
+      setMoveSlots([]);
+    } finally {
+      setMoveLoading(false);
     }
   };
 
@@ -199,28 +274,110 @@ export default function CancelAppointmentPage() {
               <p>ביטול התור ישחרר את המשבצת באופן מיידי ולא ניתן יהיה לשחזרו.</p>
             </div>
 
-            {/* Cancel Action */}
-            <div className="space-y-2 pt-2">
-              <Button
-                variant="destructive"
-                size="lg"
-                onClick={handleCancel}
-                isLoading={isCancelling}
-                className="w-full"
-              >
-                <span>בטל את התור עכשיו</span>
-              </Button>
+            {/* Policy: too close to the appointment -> contact the business */}
+            {(blockedReason || (details && details.can_modify === false && details.modify_blocked_reason)) ? (
+              <div className="space-y-3 pt-2">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">
+                  {blockedReason || details?.modify_blocked_reason}
+                </div>
+                {appointment.business?.owner_phone && (
+                  <div className="flex gap-2">
+                    <a
+                      href={`tel:${appointment.business.owner_phone}`}
+                      className="flex-1 h-11 rounded-2xl bg-slate-100 text-slate-800 font-bold text-sm flex items-center justify-center hover:bg-slate-200"
+                    >
+                      חייג לעסק
+                    </a>
+                    <a
+                      href={`https://wa.me/${toInternationalPhone(appointment.business.owner_phone)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 h-11 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm flex items-center justify-center hover:bg-emerald-100"
+                    >
+                      וואטסאפ
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {moveMsg?.ok && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 text-center">
+                    {moveMsg.text}
+                  </div>
+                )}
 
-              {appointment.business?.slug && (
-                <Button
-                  variant="ghost"
-                  onClick={() => router.push(`/${appointment.business?.slug}`)}
-                  className="w-full text-xs text-slate-500"
-                >
-                  חזרה לעמוד העסק
-                </Button>
-              )}
-            </div>
+                {/* Reschedule */}
+                <div className="space-y-2 pt-2">
+                  {!moveOpen ? (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full"
+                      onClick={() => {
+                        setMoveOpen(true);
+                        loadMoveSlots(moveDate);
+                      }}
+                    >
+                      <span>שנה מועד</span>
+                    </Button>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3 text-right">
+                      <label className="block text-xs font-bold text-slate-700">בחר תאריך חדש</label>
+                      <input
+                        type="date"
+                        min={format(startOfToday(), "yyyy-MM-dd")}
+                        value={moveDate}
+                        onChange={(e) => e.target.value && loadMoveSlots(e.target.value)}
+                        className="w-full h-11 rounded-2xl border border-slate-200 px-3 text-sm bg-white"
+                      />
+                      {moveLoading && <p className="text-xs text-slate-500">בודק זמינות...</p>}
+                      {!moveLoading && moveSlots.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2">
+                          {moveSlots.map((sl) => (
+                            <button
+                              key={sl.startTime}
+                              type="button"
+                              onClick={() => doMove(sl)}
+                              className="h-10 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-800 hover:border-indigo-500 hover:text-indigo-700"
+                            >
+                              {sl.formattedTime}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {moveMsg && !moveMsg.ok && <p className="text-xs font-bold text-rose-600">{moveMsg.text}</p>}
+                      <Button variant="ghost" className="w-full text-xs" onClick={() => setMoveOpen(false)}>
+                        ביטול שינוי
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cancel Action */}
+                <div className="space-y-2">
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    onClick={handleCancel}
+                    isLoading={isCancelling}
+                    className="w-full"
+                  >
+                    <span>בטל את התור עכשיו</span>
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {appointment.business?.slug && (
+              <Button
+                variant="ghost"
+                onClick={() => router.push(`/${appointment.business?.slug}`)}
+                className="w-full text-xs text-slate-500"
+              >
+                חזרה לעמוד העסק
+              </Button>
+            )}
           </Card>
         )}
       </div>

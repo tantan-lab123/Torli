@@ -909,3 +909,386 @@ export async function upsertCustomerProfile(p: CustomerProfile): Promise<void> {
   }
   mockProfiles.set(p.google_id, p);
 }
+
+// ==============================================================================
+// STAFF (employees with optional system login)
+// ==============================================================================
+
+export interface StaffMember {
+  id: string;
+  business_id: string;
+  name: string;
+  phone: string;
+  role: "manager" | "staff";
+  password?: string | null; // bcrypt hash, server-side only
+  is_visible_online: boolean;
+  avatar_color?: string | null;
+  active: boolean;
+  created_at?: string;
+}
+
+const mockStaff: StaffMember[] = [];
+
+export async function getStaffByBusiness(businessId: string): Promise<StaffMember[]> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("staff_members")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data as StaffMember[]) || [];
+  }
+  return mockStaff.filter((s) => s.business_id === businessId);
+}
+
+export async function getStaffById(id: string): Promise<StaffMember | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from("staff_members").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as StaffMember) || null;
+  }
+  return mockStaff.find((s) => s.id === id) || null;
+}
+
+export async function getStaffByPhone(phone: string): Promise<StaffMember | null> {
+  const digits = phone.replace(/[^0-9]/g, "");
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("staff_members")
+      .select("*")
+      .eq("phone", digits)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as StaffMember) || null;
+  }
+  return mockStaff.find((s) => s.phone === digits) || null;
+}
+
+export async function createStaff(input: {
+  business_id: string;
+  name: string;
+  phone: string;
+  role: "manager" | "staff";
+  passwordHash?: string;
+  is_visible_online?: boolean;
+  avatar_color?: string;
+}): Promise<StaffMember> {
+  const row = {
+    business_id: input.business_id,
+    name: input.name,
+    phone: input.phone,
+    role: input.role,
+    password: input.passwordHash || null,
+    is_visible_online: input.is_visible_online ?? true,
+    avatar_color: input.avatar_color || null,
+  };
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from("staff_members").insert(row).select().single();
+    if (error) throw error;
+    return data as StaffMember;
+  }
+  const s: StaffMember = {
+    ...row,
+    id: "st-" + Math.random().toString(36).substring(2, 9),
+    active: true,
+    created_at: new Date().toISOString(),
+  };
+  mockStaff.push(s);
+  return s;
+}
+
+export async function updateStaff(
+  id: string,
+  updates: Partial<Pick<StaffMember, "name" | "phone" | "role" | "is_visible_online" | "active">> & {
+    passwordHash?: string | null;
+  }
+): Promise<StaffMember | null> {
+  const { passwordHash, ...rest } = updates;
+  const payload: Record<string, unknown> = { ...rest };
+  if (passwordHash !== undefined) payload.password = passwordHash;
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("staff_members")
+      .update(payload)
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    return (data as StaffMember) || null;
+  }
+  const s = mockStaff.find((x) => x.id === id);
+  if (!s) return null;
+  Object.assign(s, payload);
+  return s;
+}
+
+export async function deleteStaff(id: string): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("staff_members").delete().eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const i = mockStaff.findIndex((x) => x.id === id);
+  if (i !== -1) mockStaff.splice(i, 1);
+}
+
+export async function setAppointmentStaff(id: string, staffId: string | null): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("appointments").update({ staff_id: staffId }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const a = db.appointments.find((x) => x.id === id);
+  if (a) (a as Appointment & { staff_id?: string | null }).staff_id = staffId;
+}
+
+/** Moves an appointment to a new time (used by customer/owner rescheduling). */
+export async function rescheduleAppointment(
+  id: string,
+  startIso: string,
+  endIso: string
+): Promise<Appointment | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("appointments")
+      .update({ start_time: startIso, end_time: endIso, reminder_sent: false })
+      .eq("id", id)
+      .select("*, service:services(*), client:clients(*), business:businesses(id,slug,name,owner_phone,working_hours,created_at)")
+      .maybeSingle();
+    if (error) throw error;
+    return (data as Appointment) || null;
+  }
+  const idx = db.appointments.findIndex((a) => a.id === id);
+  if (idx === -1) return null;
+  db.appointments[idx].start_time = startIso;
+  db.appointments[idx].end_time = endIso;
+  db.appointments[idx].reminder_sent = false;
+  return hydrateAppointment(db.appointments[idx], db.businesses, db.services, db.clients);
+}
+
+// ==============================================================================
+// WAITING LIST
+// ==============================================================================
+
+export interface WaitlistEntry {
+  id: string;
+  business_id: string;
+  service_id: string | null;
+  phone: string;
+  first_name: string;
+  last_name: string;
+  desired_date: string; // YYYY-MM-DD (Israel)
+  status: "waiting" | "slot_open" | "done" | "cancelled";
+  opened_start: string | null;
+  created_at: string;
+  service?: { name: string } | null;
+}
+
+const mockWaitlist: WaitlistEntry[] = [];
+
+export async function addWaitlistEntry(input: {
+  business_id: string;
+  service_id: string;
+  phone: string;
+  first_name: string;
+  last_name: string;
+  desired_date: string;
+}): Promise<{ entry: WaitlistEntry; duplicate: boolean }> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const existing = await supabaseAdmin
+      .from("waitlist")
+      .select("*")
+      .eq("business_id", input.business_id)
+      .eq("phone", input.phone)
+      .eq("desired_date", input.desired_date)
+      .eq("service_id", input.service_id)
+      .in("status", ["waiting", "slot_open"])
+      .limit(1)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (existing.data) return { entry: existing.data as WaitlistEntry, duplicate: true };
+    const { data, error } = await supabaseAdmin.from("waitlist").insert(input).select().single();
+    if (error) throw error;
+    return { entry: data as WaitlistEntry, duplicate: false };
+  }
+  const dup = mockWaitlist.find(
+    (w) =>
+      w.business_id === input.business_id &&
+      w.phone === input.phone &&
+      w.desired_date === input.desired_date &&
+      w.service_id === input.service_id &&
+      (w.status === "waiting" || w.status === "slot_open")
+  );
+  if (dup) return { entry: dup, duplicate: true };
+  const entry: WaitlistEntry = {
+    ...input,
+    id: "wl-" + Math.random().toString(36).substring(2, 9),
+    status: "waiting",
+    opened_start: null,
+    created_at: new Date().toISOString(),
+  };
+  mockWaitlist.push(entry);
+  return { entry, duplicate: false };
+}
+
+export async function getWaitlist(businessId: string): Promise<WaitlistEntry[]> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("waitlist")
+      .select("*, service:services(name)")
+      .eq("business_id", businessId)
+      .in("status", ["waiting", "slot_open"])
+      .order("desired_date", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data as unknown as WaitlistEntry[]) || [];
+  }
+  return mockWaitlist
+    .filter((w) => w.business_id === businessId && (w.status === "waiting" || w.status === "slot_open"))
+    .map((w) => ({ ...w, service: db.services.find((s) => s.id === w.service_id) || null }));
+}
+
+export async function setWaitlistStatus(
+  id: string,
+  businessId: string,
+  status: "done" | "cancelled"
+): Promise<boolean> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("waitlist")
+      .update({ status })
+      .eq("id", id)
+      .eq("business_id", businessId)
+      .select("id");
+    if (error) throw error;
+    return (data?.length || 0) > 0;
+  }
+  const w = mockWaitlist.find((x) => x.id === id && x.business_id === businessId);
+  if (!w) return false;
+  w.status = status;
+  return true;
+}
+
+/** A booked slot was freed: everyone waiting for that Israel calendar day is flagged. */
+export async function openWaitlistForSlot(
+  businessId: string,
+  israelDate: string,
+  startIso: string
+): Promise<number> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("waitlist")
+      .update({ status: "slot_open", opened_start: startIso })
+      .eq("business_id", businessId)
+      .eq("desired_date", israelDate)
+      .in("status", ["waiting", "slot_open"])
+      .select("id");
+    if (error) throw error;
+    return data?.length || 0;
+  }
+  let n = 0;
+  for (const w of mockWaitlist) {
+    if (w.business_id === businessId && w.desired_date === israelDate && w.status !== "done" && w.status !== "cancelled") {
+      w.status = "slot_open";
+      w.opened_start = startIso;
+      n += 1;
+    }
+  }
+  return n;
+}
+
+// ==============================================================================
+// WEB PUSH (subscriptions + server-held VAPID keys)
+// ==============================================================================
+
+export interface PushSub {
+  endpoint: string;
+  business_id: string;
+  staff_id?: string | null;
+  p256dh: string;
+  auth: string;
+}
+
+const mockPush = new Map<string, PushSub>();
+const mockSecrets = new Map<string, string>();
+
+export async function savePushSubscription(sub: PushSub): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .upsert(
+        { endpoint: sub.endpoint, business_id: sub.business_id, staff_id: sub.staff_id || null, p256dh: sub.p256dh, auth: sub.auth },
+        { onConflict: "endpoint" }
+      );
+    if (error) throw error;
+    return;
+  }
+  mockPush.set(sub.endpoint, sub);
+}
+
+export async function deletePushSubscription(endpoint: string, businessId: string): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .delete()
+      .eq("endpoint", endpoint)
+      .eq("business_id", businessId);
+    if (error) throw error;
+    return;
+  }
+  const s = mockPush.get(endpoint);
+  if (s && s.business_id === businessId) mockPush.delete(endpoint);
+}
+
+export async function getPushSubscriptions(businessId: string): Promise<PushSub[]> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("endpoint,business_id,staff_id,p256dh,auth")
+      .eq("business_id", businessId);
+    if (error) throw error;
+    return (data as PushSub[]) || [];
+  }
+  return Array.from(mockPush.values()).filter((s) => s.business_id === businessId);
+}
+
+export async function getSecret(key: string): Promise<string | null> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from("app_secrets").select("value").eq("key", key).maybeSingle();
+    if (error) throw error;
+    return (data?.value as string) || null;
+  }
+  return mockSecrets.get(key) || null;
+}
+
+/** Stores a secret only if it does not exist yet; returns the winning value (race-safe). */
+export async function setSecretIfAbsent(key: string, value: string): Promise<string> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    await supabaseAdmin.from("app_secrets").upsert({ key, value }, { onConflict: "key", ignoreDuplicates: true });
+    return (await getSecret(key)) || value;
+  }
+  if (!mockSecrets.has(key)) mockSecrets.set(key, value);
+  return mockSecrets.get(key)!;
+}
+
+// ==============================================================================
+// EXPORT (owner backup)
+// ==============================================================================
+
+export async function getAllAppointmentsForExport(businessId: string): Promise<Appointment[]> {
+  return getAppointments(businessId);
+}
+
+export async function getBusinessesByEmail(email: string): Promise<Business[]> {
+  const e = email.trim().toLowerCase();
+  if (isSupabaseConfigured && supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("businesses")
+      .select("*")
+      .ilike("owner_email", escapeLike(e));
+    if (error) throw error;
+    return (data || []).map(normalizeBusinessRecord);
+  }
+  return db.businesses.filter((b) => b.owner_email?.toLowerCase() === e).map(normalizeBusinessRecord);
+}

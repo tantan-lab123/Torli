@@ -84,7 +84,8 @@ import { AdminTopBar, AdminTab } from "@/components/admin/AdminTopBar";
 import { AdminFAB } from "@/components/admin/AdminFAB";
 import { CustomersSection } from "@/components/admin/CustomersSection";
 import { StatsSection } from "@/components/admin/StatsSection";
-import { EmployeesSection } from "@/components/admin/EmployeesSection";
+import { EmployeesSection, TeamMember } from "@/components/admin/EmployeesSection";
+import { WaitlistPanel } from "@/components/admin/WaitlistPanel";
 import { ProductsSection } from "@/components/admin/ProductsSection";
 import { MarketingSection } from "@/components/admin/MarketingSection";
 import { CashRegisterSection } from "@/components/admin/CashRegisterSection";
@@ -166,7 +167,15 @@ export default function AdminDashboardPage() {
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
 
   // SaaS domain collections - start empty for new businesses!
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<TeamMember[]>([]);
+  const [role, setRole] = useState<"owner" | "manager" | "staff">("owner");
+  const [staffName, setStaffName] = useState<string | undefined>();
+
+  // forgot-password (email link) UI
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMsg, setForgotMsg] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
   const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS.default);
   const [marketingMessages, setMarketingMessages] = useState<MarketingMessage[]>(DEFAULT_MARKETING_MESSAGES);
   const [customClients, setCustomClients] = useState<Client[]>([]);
@@ -298,7 +307,10 @@ export default function AdminDashboardPage() {
       try {
         const res = await fetch("/api/auth/session");
         if (res.ok) {
-          const { business: biz } = await res.json();
+          const sess = await res.json();
+          const biz = sess.business;
+          setRole(sess.role || "owner");
+          setStaffName(sess.staff?.name);
           setSelectedBusiness(biz);
           setEditingWorkingHours(biz.working_hours);
           setEditingInterval(biz.slot_interval_minutes || 15);
@@ -326,7 +338,12 @@ export default function AdminDashboardPage() {
           return;
         }
 
-        if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user?.email && !selectedBusiness) {
+        if (
+          (event === "SIGNED_IN" || event === "INITIAL_SESSION") &&
+          session?.user?.email &&
+          session.user.app_metadata?.provider === "google" &&
+          !selectedBusiness
+        ) {
           try {
             setIsLoggingIn(true);
             const res = await fetch("/api/auth/login", {
@@ -340,6 +357,7 @@ export default function AdminDashboardPage() {
 
             const data = await res.json();
             if (res.ok && data.business) {
+              setRole(data.role || "owner");
               setSelectedBusiness(data.business);
               setEditingWorkingHours(data.business.working_hours);
               setEditingInterval(data.business.slot_interval_minutes || 15);
@@ -413,6 +431,8 @@ export default function AdminDashboardPage() {
 
       // Success
       const biz: Business = data.business;
+      setRole((data.role as "owner" | "manager" | "staff") || "owner");
+      setStaffName(data.staff?.name);
       setSelectedBusiness(biz);
       setEditingWorkingHours(biz.working_hours);
       setEditingInterval(biz.slot_interval_minutes || 15);
@@ -663,34 +683,42 @@ export default function AdminDashboardPage() {
     return () => clearInterval(intervalId);
   }, [selectedBusiness, fetchAppointments]);
 
-  // Load employees specific to this business (never mock staff for real new businesses!)
+  // Team members come from the server (per business, with roles)
+  const loadEmployees = useCallback(async () => {
+    try {
+      const res = await fetch("/api/staff");
+      if (res.ok) setEmployees(await res.json());
+    } catch (err) {
+      console.error("Failed to load staff:", err);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!selectedBusiness) {
-      setEmployees([]);
-      return;
-    }
-    const saved = localStorage.getItem(`torli_employees_${selectedBusiness.id}`);
-    if (saved) {
-      try {
-        setEmployees(JSON.parse(saved));
-        return;
-      } catch {}
-    }
-    // Only pre-populate if demo business
-    if (selectedBusiness.id === "b-barber-1" || selectedBusiness.slug === "barber-dan") {
-      setEmployees(DEFAULT_EMPLOYEES.default || []);
-    } else {
-      setEmployees([]);
-    }
-  }, [selectedBusiness?.id, selectedBusiness?.slug]);
+    if (selectedBusiness) loadEmployees();
+    else setEmployees([]);
+  }, [selectedBusiness?.id, loadEmployees]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A role may not sit on a tab it cannot use (e.g. after switching accounts)
+  useEffect(() => {
+    const allowed =
+      role === "staff"
+        ? ["calendar", "customers"]
+        : role === "manager"
+        ? ["calendar", "stats", "customers", "services", "workschedule", "marketing", "cashregister", "settings"]
+        : null;
+    if (allowed && !allowed.includes(activeTab)) setActiveTab("calendar");
+  }, [role, activeTab]);
 
   // Appointments for the selected day
   const dailyAppointments = useMemo(() => {
     return appointments.filter((app) => {
       const appDate = parseISO(app.start_time);
-      return isSameDay(appDate, selectedDate);
+      if (!isSameDay(appDate, selectedDate)) return false;
+      if (selectedStaffId === "all") return true;
+      const isBlock = app.notes?.includes("[זמן חסום]");
+      return isBlock || app.staff_id === selectedStaffId;
     });
-  }, [appointments, selectedDate]);
+  }, [appointments, selectedDate, selectedStaffId]);
 
   // Daily Stats KPI
   const dailyStats = useMemo(() => {
@@ -1181,6 +1209,63 @@ export default function AdminDashboardPage() {
                   <span>התחבר ליומן שלי</span>
                 </Button>
               </form>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgot((v) => !v);
+                    setForgotMsg("");
+                  }}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  שכחתי סיסמה
+                </button>
+              </div>
+
+              {showForgot && (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setForgotBusy(true);
+                    setForgotMsg("");
+                    try {
+                      const res = await fetch("/api/auth/forgot", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: forgotEmail }),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      setForgotMsg(
+                        res.ok
+                          ? data.message || "אם קיים חשבון עם האימייל הזה, נשלח אליו קישור לאיפוס."
+                          : data.error || "שגיאה בשליחה"
+                      );
+                    } catch {
+                      setForgotMsg("שגיאת תקשורת");
+                    } finally {
+                      setForgotBusy(false);
+                    }
+                  }}
+                  className="space-y-2 rounded-2xl bg-slate-50 border border-slate-200 p-3 text-right"
+                >
+                  <p className="text-xs text-slate-600">
+                    הזן את כתובת האימייל שהגדרת לחשבון העסק. נשלח אליה קישור לאיפוס הסיסמה.
+                  </p>
+                  <Input
+                    label="אימייל החשבון"
+                    type="email"
+                    dir="ltr"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                  />
+                  <Button type="submit" className="w-full" disabled={forgotBusy}>
+                    {forgotBusy ? "שולח..." : "שלח קישור לאיפוס"}
+                  </Button>
+                  {forgotMsg && <p className="text-xs font-semibold text-emerald-700">{forgotMsg}</p>}
+                </form>
+              )}
 
               {/* Demo credentials: development only, never shown in production */}
               {process.env.NODE_ENV !== "production" && (
@@ -1683,6 +1768,8 @@ export default function AdminDashboardPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onLogout={handleLogout}
+        role={role}
+        staffName={staffName}
       />
 
       {/* Real-time New Booking Toast Banner */}
@@ -1933,6 +2020,8 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
+              <WaitlistPanel businessName={selectedBusiness.name} />
+
               {dailyAppointments.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-8 text-center">
                   <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -2003,6 +2092,32 @@ export default function AdminDashboardPage() {
                             <p className="text-xs text-slate-500 mt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                               {app.notes}
                             </p>
+                          )}
+
+                          {employees.length > 0 && !isBlockedSlot && !isCancelled && (
+                            <select
+                              value={app.staff_id || ""}
+                              onChange={async (e) => {
+                                triggerHaptic(10);
+                                await fetch(`/api/appointments/${app.id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ staff_id: e.target.value || null }),
+                                });
+                                fetchAppointments(true);
+                              }}
+                              className="mt-1.5 h-8 rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700"
+                              title="שייך את התור לעובד"
+                            >
+                              <option value="">ללא עובד מוגדר</option>
+                              {employees
+                                .filter((emp) => emp.active)
+                                .map((emp) => (
+                                  <option key={emp.id} value={emp.id}>
+                                    {emp.name}
+                                  </option>
+                                ))}
+                            </select>
                           )}
                         </div>
 
@@ -2435,34 +2550,33 @@ export default function AdminDashboardPage() {
               employees={employees}
               services={services}
               businessId={selectedBusiness.id}
-              onAddEmployee={(newEmp) => {
-                setEmployees((prev) => {
-                  const updated = [newEmp as Employee, ...prev];
-                  if (selectedBusiness) {
-                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
-                  }
-                  return updated;
+              onAddEmployee={async (input) => {
+                const res = await fetch("/api/staff", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(input),
                 });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) return data.error || "שגיאה בהוספת העובד";
+                await loadEmployees();
+                return null;
               }}
-              onToggleVisibility={(empId) => {
-                setEmployees((prev) => {
-                  const updated = prev.map((e) =>
-                    e.id === empId ? { ...e, is_visible_online: !e.is_visible_online } : e
-                  );
-                  if (selectedBusiness) {
-                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
-                  }
-                  return updated;
+              onUpdateEmployee={async (id, patch) => {
+                const res = await fetch("/api/staff", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id, ...patch }),
                 });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) return data.error || "שגיאה בעדכון העובד";
+                await loadEmployees();
+                return null;
               }}
-              onDeleteEmployee={(empId) => {
-                setEmployees((prev) => {
-                  const updated = prev.filter((e) => e.id !== empId);
-                  if (selectedBusiness) {
-                    localStorage.setItem(`torli_employees_${selectedBusiness.id}`, JSON.stringify(updated));
-                  }
-                  return updated;
-                });
+              onDeleteEmployee={async (id) => {
+                const res = await fetch(`/api/staff?id=${id}`, { method: "DELETE" });
+                if (!res.ok) return "שגיאה במחיקת העובד";
+                await loadEmployees();
+                return null;
               }}
             />
           </div>
@@ -2556,7 +2670,8 @@ export default function AdminDashboardPage() {
                   setSelectedBusiness(updated);
                 }
               }}
-              onDeleteBusiness={handleDeleteBusiness}
+              onDeleteBusiness={role === "owner" ? handleDeleteBusiness : undefined}
+              role={role}
             />
           </div>
         )}

@@ -10,16 +10,16 @@ import {
 import { validatePassword, generateRandomSlug } from "@/lib/utils";
 import {
   forbidden,
-  getSessionBusinessId,
+  getSession,
   setSessionCookie,
   clearSessionCookie,
   toOwnerBusiness,
   toPublicBusiness,
-  unauthorized,
   verifyGoogleAccessToken,
 } from "@/lib/auth";
 import { isPasswordPwned, PWNED_ERROR } from "@/lib/pwned";
 import { clientIp, rateLimit, tooMany } from "@/lib/rateLimit";
+import { requireRole, MANAGEMENT, OWNER_ONLY } from "@/lib/access";
 import { sanitizeDateOverrides, sanitizeSettings, sanitizeWorkingHours } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -46,17 +46,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
   }
 
-  // The logged-in owner gets their own full view (incl. calendar token).
-  if (getSessionBusinessId(request) === business.id) {
-    return NextResponse.json(toOwnerBusiness(business));
+  // Logged-in users of this business get their full view (calendar token only for owner/manager).
+  const session = getSession(request);
+  if (session?.businessId === business.id) {
+    return NextResponse.json(toOwnerBusiness(business, session.role));
   }
   return NextResponse.json(toPublicBusiness(business));
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    const sessionId = getSessionBusinessId(request);
-    if (!sessionId) return unauthorized();
+    const auth = await requireRole(request, MANAGEMENT);
+    if (auth.error) return auth.error;
+    const sessionId = auth.session.businessId;
 
     const body = await request.json();
     const {
@@ -71,8 +73,13 @@ export async function PATCH(request: NextRequest) {
       settings,
     } = body;
 
-    // An owner may only modify their own business.
+    // Only their own business may be modified.
     if (id && id !== sessionId) return forbidden();
+    // Credentials and account identity are owner-only (managers run the business, not the account).
+    const isOwner = auth.session.role === "owner";
+    if (!isOwner && password !== undefined) {
+      return forbidden("רק בעל העסק יכול לשנות את סיסמת החשבון");
+    }
     const businessId = sessionId;
 
     if (password !== undefined) {
@@ -86,7 +93,7 @@ export async function PATCH(request: NextRequest) {
     if (name !== undefined && (typeof name !== "string" || name.trim().length < 1 || name.length > 120)) {
       return NextResponse.json({ error: "שם עסק לא תקין" }, { status: 400 });
     }
-    if (owner_phone !== undefined) {
+    if (isOwner && owner_phone !== undefined) {
       const digits = String(owner_phone).replace(/\D/g, "");
       if (digits.length !== 10 || !digits.startsWith("0")) {
         return NextResponse.json({ error: "מספר טלפון לא תקין" }, { status: 400 });
@@ -115,8 +122,8 @@ export async function PATCH(request: NextRequest) {
 
     const updated = await updateBusiness(businessId, {
       ...(name ? { name: name.trim() } : {}),
-      ...(owner_phone ? { owner_phone } : {}),
-      ...(owner_email ? { owner_email: String(owner_email).trim().slice(0, 254) } : {}),
+      ...(isOwner && owner_phone ? { owner_phone } : {}),
+      ...(isOwner && owner_email ? { owner_email: String(owner_email).trim().slice(0, 254) } : {}),
       ...(password ? { password } : {}),
       ...(cleanHours ? { working_hours: cleanHours } : {}),
       ...(slot_interval_minutes !== undefined
@@ -129,7 +136,7 @@ export async function PATCH(request: NextRequest) {
     if (!updated) {
       return NextResponse.json({ error: "עסק לא נמצא" }, { status: 404 });
     }
-    return NextResponse.json(toOwnerBusiness(updated));
+    return NextResponse.json(toOwnerBusiness(updated, auth.session.role));
   } catch (error) {
     console.error("Error updating business:", error);
     return NextResponse.json({ error: "שגיאה בעדכון פרטי העסק" }, { status: 500 });
@@ -216,8 +223,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const sessionId = getSessionBusinessId(request);
-    if (!sessionId) return unauthorized();
+    const auth = await requireRole(request, OWNER_ONLY);
+    if (auth.error) return auth.error;
+    const sessionId = auth.session.businessId;
 
     const id = request.nextUrl.searchParams.get("id");
     if (id && id !== sessionId) return forbidden();

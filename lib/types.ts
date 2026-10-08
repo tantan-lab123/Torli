@@ -160,6 +160,7 @@ export interface Appointment {
   status: AppointmentStatus;
   reminder_sent: boolean;
   notes?: string | null;
+  staff_id?: string | null;
   created_at?: string;
 
   // Joined fields for convenience
