@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 // Demo booking pages the landing page links to, in order of preference. Only the ones
 // that exist in this database are linked, by name only.
-const DEMO_SLUGS = ["maya-nails", "barber-dan", "clinic-rafael"];
+const DEMO_SLUGS = ["barber-dan", "maya-nails", "clinic-rafael"];
 
 async function getDemos(): Promise<{ slug: string; name: string }[]> {
   try {

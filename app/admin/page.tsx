@@ -58,19 +58,13 @@ import {
   validatePhoneNumber,
   formatJewishDate,
   getJewishHolidayOrShabbat,
-  getHebrewDayLetter,
   generateRandomSlug,
 } from "@/lib/utils";
 import { supabase } from "@/lib/db/supabase";
 import {
   addDays,
   subDays,
-  addMonths,
-  subMonths,
-  startOfMonth,
-  endOfMonth,
   eachDayOfInterval,
-  getDay,
   startOfWeek,
   format,
   isSameDay,
@@ -87,6 +81,7 @@ import { CustomersSection } from "@/components/admin/CustomersSection";
 import { StatsSection } from "@/components/admin/StatsSection";
 import { EmployeesSection, TeamMember } from "@/components/admin/EmployeesSection";
 import { WaitlistPanel } from "@/components/admin/WaitlistPanel";
+import { MonthTable } from "@/components/admin/MonthTable";
 import { ProductsSection } from "@/components/admin/ProductsSection";
 import { MarketingSection } from "@/components/admin/MarketingSection";
 import { CashRegisterSection } from "@/components/admin/CashRegisterSection";
@@ -759,17 +754,6 @@ export default function AdminDashboardPage() {
     return map;
   }, [appointments]);
 
-  // Month days & weekday alignment for owner view
-  const ownerMonthDays = useMemo(() => {
-    const start = startOfMonth(ownerMonth);
-    const end = endOfMonth(ownerMonth);
-    return eachDayOfInterval({ start, end });
-  }, [ownerMonth]);
-
-  const ownerStartDayOfWeek = useMemo(() => {
-    return getDay(startOfMonth(ownerMonth)); // 0 = Sunday
-  }, [ownerMonth]);
-
   // Check if business works on a given day of the week
   const isBusinessOpenOnDay = useCallback(
     (date: Date) => {
@@ -1091,10 +1075,12 @@ export default function AdminDashboardPage() {
           <div className="text-center space-y-3">
             <Logo size={40} className="justify-center" />
             <h1 className="text-2xl font-extrabold text-ink-900">
-              כניסה לבעלי עסקים
+              {authTab === "register" ? "פתיחת יומן לעסק" : "כניסה לבעלי עסקים"}
             </h1>
             <p className="text-sm text-ink-600 max-w-xs mx-auto">
-              היומן, הלקוחות וההגדרות של העסק שלך, במקום אחד
+              {authTab === "register"
+                ? "כמה פרטים על העסק, והיומן שלך מוכן לקבל תורים"
+                : "היומן, הלקוחות וההגדרות של העסק שלך, במקום אחד"}
             </p>
           </div>
 
@@ -2218,194 +2204,21 @@ export default function AdminDashboardPage() {
 
             {/* SUB-VIEW 2: FULL MONTH CALENDAR & FAST CLOSURES */}
             {scheduleMode === "month" && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <Card className="p-4 sm:p-5 space-y-4">
-                  {/* Month Navigation */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => setOwnerMonth((m) => subMonths(m, 1))}
-                      className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
-                      title="חודש קודם"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-
-                    <div className="text-center">
-                      <span className="text-base sm:text-lg font-extrabold text-slate-900 capitalize">
-                        {format(ownerMonth, "MMMM yyyy", { locale: he })}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setOwnerMonth((m) => addMonths(m, 1))}
-                      className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center"
-                      title="חודש הבא"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Range Closure Action Banner */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-rose-50/70 p-3.5 rounded-2xl border border-rose-200 text-right">
-                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                      <Palmtree className="w-5 h-5 text-rose-600 flex-shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold text-rose-950">
-                          סגירת שבוע שלם או חופשה מרוכזת
-                        </div>
-                        <div className="text-[11px] text-rose-700">
-                          חסום שבוע או טווח ימים שלם בלחיצה אחת, בלי לעבור יום-יום
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => {
-                        applyPresetNextWeek();
-                        setIsRangeModalOpen(true);
-                      }}
-                      className="w-full sm:w-auto text-xs font-bold whitespace-nowrap shadow-sm"
-                    >
-                      <CalendarX className="w-3.5 h-3.5 ml-1" />
-                      <span>סגור שבוע / חופשה</span>
-                    </Button>
-                  </div>
-
-                  {/* Weekday Column Headers */}
-                  <div className="grid grid-cols-7 gap-1 text-center select-none pt-1">
-                    {["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"].map((dayName, idx) => (
-                      <div key={idx} className="text-xs font-bold text-slate-400 py-1">
-                        {dayName}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Month Grid */}
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2 text-center items-stretch">
-                    {Array.from({ length: ownerStartDayOfWeek }).map((_, i) => (
-                      <div key={`owner-pad-${i}`} className="min-h-16" />
-                    ))}
-
-                    {ownerMonthDays.map((day, idx) => {
-                      const dStr = format(day, "yyyy-MM-dd");
-                      const dayNum = format(day, "d");
-                      const isTodayDate = isSameDay(day, startOfToday());
-                      const isSelected = isSameDay(day, selectedDate);
-                      const isPastDate = isBefore(day, startOfToday());
-                      const override = getOverrideForDate(day);
-                      const isWeeklyOpen = isBusinessOpenOnDay(day);
-                      const appCount = appointmentsCountByDate[dStr] || 0;
-                      const isOverrideClosed = override?.is_closed ?? false;
-
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setDayActionModalDate(day)}
-                          className={cn(
-                            "min-h-16 p-1.5 rounded-2xl border flex flex-col justify-between items-center transition-all relative group text-right",
-                            isPastDate
-                              ? "bg-slate-100/75 border-slate-200 text-slate-500 hover:bg-slate-200/60 hover:border-slate-300"
-                              : isOverrideClosed
-                              ? "bg-rose-50 border-rose-200 hover:border-rose-400"
-                              : !isWeeklyOpen
-                              ? "bg-slate-50 border-slate-200/80 opacity-60"
-                              : "bg-white border-slate-200 hover:border-indigo-400 hover:shadow-xs",
-                            isTodayDate && "ring-2 ring-indigo-500/50",
-                            isSelected && "ring-2 ring-indigo-600"
-                          )}
-                          title={`לחץ לניהול יום ${formatHebrewDate(day)}`}
-                        >
-                          <div className="flex items-center justify-between w-full px-0.5">
-                            <span
-                              className={cn(
-                                "text-xs font-bold",
-                                isPastDate
-                                  ? "text-slate-500 font-semibold"
-                                  : isOverrideClosed
-                                  ? "text-rose-950 font-extrabold"
-                                  : isTodayDate
-                                  ? "text-indigo-600 font-extrabold"
-                                  : "text-slate-800"
-                              )}
-                            >
-                              {dayNum}
-                            </span>
-                            {selectedBusiness?.settings?.show_hebrew_dates && (
-                              <span className="text-[10px] text-slate-500 font-bold truncate max-w-[44px]">
-                                {getHebrewDayLetter(day)}
-                              </span>
-                            )}
-                            {isTodayDate && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                            )}
-                          </div>
-
-                          {selectedBusiness?.settings?.show_hebrew_dates && getJewishHolidayOrShabbat(day) && (
-                            <div className="w-full text-center px-0.5 mt-0.5">
-                              <span className="text-[9px] font-semibold text-amber-800 bg-amber-50/90 border border-amber-200/70 px-1 py-0.5 rounded block truncate">
-                                {getJewishHolidayOrShabbat(day)}
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="w-full text-center my-auto">
-                            {isPastDate ? (
-                              appCount > 0 ? (
-                                <span className="text-[10px] font-bold text-slate-700 bg-slate-200/80 border border-slate-300/80 px-1 py-0.5 rounded-md block truncate">
-                                  {appCount} שהיו
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 block font-normal">
-                                  עבר
-                                </span>
-                              )
-                            ) : isOverrideClosed ? (
-                              <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100/90 px-1 py-0.5 rounded-md block truncate">
-                                {override?.reason || "סגור"}
-                              </span>
-                            ) : !isWeeklyOpen ? (
-                              <span className="text-[10px] text-slate-400 block font-medium">
-                                סגור קבוע
-                              </span>
-                            ) : appCount > 0 ? (
-                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1 py-0.5 rounded-md block">
-                                {appCount} תורים
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-emerald-600 font-medium block">
-                                פתוח
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Legend */}
-                  <div className="flex flex-wrap items-center justify-center gap-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-md bg-white border border-slate-300" />
-                      <span>יום עבודה</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-md bg-rose-100 border border-rose-300" />
-                      <span className="font-bold text-rose-700">חופשה / סגור</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-md bg-indigo-100 border border-indigo-300" />
-                      <span className="text-indigo-700 font-semibold">יש תורים</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-md bg-slate-200 border border-slate-300" />
-                      <span className="text-slate-600 font-medium">עבר (לחיץ לצפייה)</span>
-                    </div>
-                  </div>
-                </Card>
+              <div className="animate-in fade-in duration-200">
+                <MonthTable
+                  month={ownerMonth}
+                  onMonthChange={setOwnerMonth}
+                  selectedDate={selectedDate}
+                  countByDate={appointmentsCountByDate}
+                  isOpenOnDay={isBusinessOpenOnDay}
+                  getOverride={getOverrideForDate}
+                  showHebrewDates={!!selectedBusiness?.settings?.show_hebrew_dates}
+                  onPickDay={setDayActionModalDate}
+                  onCloseRange={() => {
+                    applyPresetNextWeek();
+                    setIsRangeModalOpen(true);
+                  }}
+                />
               </div>
             )}
           </div>

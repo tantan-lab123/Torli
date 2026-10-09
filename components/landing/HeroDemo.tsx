@@ -17,15 +17,15 @@ type Frame = {
   tap?: { x: number; y: number };
 };
 
-// A real booking at the demo nail studio, screen by screen, then the owner's phone.
+// A real booking at the demo barbershop, screen by screen, then the owner's phone.
 const CLIENT: Frame[] = [
   {
     screen: "booking-service",
     label: "שירות",
     ms: 2600,
     tap: { x: 27.5, y: 95.3 },
-    caption: "הלקוחה בוחרת טיפול, ורואה מחיר ומשך",
-    alt: "עמוד ההזמנה של סטודיו מיה: רשימת טיפולים עם משך ומחיר",
+    caption: "הלקוח בוחר שירות, ורואה מחיר ומשך",
+    alt: "עמוד ההזמנה של מספרת דניאל: רשימת שירותים עם משך ומחיר",
   },
   {
     screen: "booking-day",
@@ -39,8 +39,8 @@ const CLIENT: Frame[] = [
     screen: "booking-time",
     label: "שעה",
     ms: 2600,
-    tap: { x: 85.2, y: 72.1 },
-    caption: "בוחרת בוקר, צהריים או ערב, ואז שעה פנויה",
+    tap: { x: 38.3, y: 79.1 },
+    caption: "בוחר בוקר, צהריים או ערב, ואז שעה פנויה",
     alt: "בחירת שעה: לשוניות בוקר, צהריים וערב, ומתחתן השעות הפנויות",
   },
   {
@@ -48,8 +48,8 @@ const CLIENT: Frame[] = [
     label: "פרטים",
     ms: 3000,
     tap: { x: 36.5, y: 95.3 },
-    caption: "לקוחה חוזרת מזוהה לפי הטלפון, והפרטים מתמלאים לבד",
-    alt: "מסך הפרטים: הלקוחה זוהתה לפי מספר הטלפון והשם מולא לבד",
+    caption: "לקוח חוזר מזוהה לפי הטלפון, והפרטים מתמלאים לבד",
+    alt: "מסך הפרטים: הלקוח זוהה לפי מספר הטלפון והשם מולא לבד",
   },
   {
     screen: "booking-done",
@@ -65,7 +65,7 @@ const OWNER: Frame = {
   label: "אצלכם",
   ms: 4200,
   caption: "ואצלכם: התראה בטלפון, והתור כבר ביומן",
-  alt: "היומן של בעלת העסק: התור הבא, מספר התורים והכנסה צפויה להיום",
+  alt: "היומן של בעל העסק: התור הבא, מספר התורים והכנסה צפויה להיום",
 };
 
 // With two phones side by side the last client screen waits for the owner's banner.
@@ -107,13 +107,13 @@ export function HeroDemo() {
   };
 
   return (
-    <div ref={rootRef} role="group" aria-label="הדגמה: לקוחה קובעת תור מהטלפון, והתור מגיע לבעלת העסק">
+    <div ref={rootRef} role="group" aria-label="הדגמה: לקוח קובע תור מהטלפון, והתור מגיע לבעל העסק">
       <div className="flex items-start justify-center">
         {/* The client's phone */}
         <div className="w-[min(280px,74vw)] md:w-[250px] xl:w-[232px]">
           <p className="mb-3 hidden items-center gap-2 text-[13px] font-bold text-ink-600 md:flex">
             <span aria-hidden="true" className="h-2 w-2 bg-ink-900" />
-            הטלפון של הלקוחה
+            הטלפון של הלקוח
           </p>
           <PhoneFrame>
             {CLIENT.map((f, i) => (
@@ -276,7 +276,7 @@ function PushBanner({ on }: { on: boolean }) {
         </span>
         <span className="block text-[length:3.6cqw] font-extrabold leading-tight text-ink-900">תור חדש נקבע</span>
         <span className="block text-[length:3.2cqw] leading-snug text-ink-700">
-          נועה לוי · מניקור משולב לק ג׳ל · יום שלישי, 13 באוקטובר 11:30
+          איתי מזרחי · תספורת גברים קלאסית · יום שלישי, 13 באוקטובר 11:30
         </span>
       </span>
     </div>
