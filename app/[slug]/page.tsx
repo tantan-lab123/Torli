@@ -573,7 +573,7 @@ export default function BookingPage() {
         particleCount: 70,
         spread: 60,
         origin: { y: 0.55 },
-        colors: ["#1E4D36", "#CFEA6E", "#2F6B4B", "#F4F1E8"],
+        colors: ["#3D2BD6", "#CFEA6E", "#8072F1", "#F5F5FA"],
         disableForReducedMotion: true,
       });
     } catch (err) {
@@ -1439,7 +1439,7 @@ export default function BookingPage() {
               </label>
 
               {/* Booking Summary Box */}
-              <Card className="m-ticket bg-white p-4 space-y-2 text-right [--notch:#F4F1E8]">
+              <Card className="m-ticket bg-white p-4 space-y-2 text-right [--notch:#F5F5FA]">
                 <span className="text-xs font-bold text-slate-400 block">
                   סיכום ההזמנה:
                 </span>
@@ -1522,7 +1522,7 @@ export default function BookingPage() {
             </div>
 
             {/* Appointment Ticket Card */}
-            <Card className="m-print m-ticket text-right p-5 space-y-3.5 [--notch:#F4F1E8]">
+            <Card className="m-print m-ticket text-right p-5 space-y-3.5 [--notch:#F5F5FA]">
               <div className="border-b border-dashed border-ink-300 pb-3">
                 <span className="text-xs text-ink-600 font-semibold block">
                   {business.name}

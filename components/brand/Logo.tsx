@@ -13,7 +13,7 @@ export function LogoMark({ size = 32, className }: { size?: number; className?: 
     >
       <path
         d="M5 6h22a3 3 0 0 1 3 3v3a4 4 0 0 0 0 8v3a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-3a4 4 0 0 0 0-8V9a3 3 0 0 1 3-3z"
-        fill="#1E4D36"
+        fill="#3D2BD6"
       />
       <path d="M11.5 9.5v13" stroke="#CFEA6E" strokeWidth="1.6" strokeLinecap="round" strokeDasharray="0.1 3.2" />
       <circle cx="20.5" cy="16" r="3.4" fill="#CFEA6E" />

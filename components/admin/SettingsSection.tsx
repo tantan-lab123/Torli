@@ -243,10 +243,10 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
         <head>
           <title>קוד QR - ${esc(business.name)}</title>
           <style>
-            body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #F4F1E8; color: #17201A; }
-            .card { max-width: 400px; margin: 0 auto; background: #FFFDF9; border: 2px dashed #1E4D36; border-radius: 12px; padding: 30px; }
-            h1 { color: #17201A; margin-bottom: 8px; }
-            p { color: #4D564F; font-size: 16px; margin-top: 0; }
+            body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #F5F5FA; color: #171624; }
+            .card { max-width: 400px; margin: 0 auto; background: #FFFFFF; border: 2px dashed #3D2BD6; border-radius: 12px; padding: 30px; }
+            h1 { color: #171624; margin-bottom: 8px; }
+            p { color: #4F4F64; font-size: 16px; margin-top: 0; }
             img { width: 260px; height: 260px; margin: 20px 0; }
             .badge { display: inline-block; background: #CFEA6E; color: #1A2E12; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 14px; }
             @media print { body { background: #fff; } }
@@ -258,7 +258,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
             <h1>${esc(business.name)}</h1>
             <p>שמחים שבאת! קובעים תור ישירות מהנייד תוך 30 שניות</p>
             <img src="${qrCodeImgUrl}" alt="QR Code" />
-            <p style="font-size: 14px; color: #4D564F;" dir="ltr">${esc(bookingUrl)}</p>
+            <p style="font-size: 14px; color: #4F4F64;" dir="ltr">${esc(bookingUrl)}</p>
           </div>
           <script>window.onload = function() { window.print(); }</script>
         </body>
