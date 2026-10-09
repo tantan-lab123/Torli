@@ -23,9 +23,9 @@ import { cn, formatHebrewDate, getHebrewDayLetter, getJewishHolidayOrShabbat } f
 const WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 
 // Cells sit on the hairline colour (gap-px), so their backgrounds must be opaque.
-const OUTSIDE = "bg-[#F7F5EE]";
+const OUTSIDE = "bg-[#F7F7FB]";
 // Closed days are ruled through, like a blocked day in a paper diary.
-const HATCH = "[background-image:repeating-linear-gradient(135deg,transparent_0_5px,rgba(23,32,26,0.07)_5px_6px)]";
+const HATCH = "[background-image:repeating-linear-gradient(135deg,transparent_0_5px,rgba(23,22,36,0.07)_5px_6px)]";
 const HATCH_DANGER =
   "[background-image:repeating-linear-gradient(135deg,transparent_0_5px,rgba(158,52,32,0.12)_5px_6px)]";
 
@@ -155,9 +155,9 @@ export function MonthTable({
                   : closedWeekly
                     ? cn("bg-paper hover:bg-ink-100", HATCH)
                     : past
-                      ? "bg-[#FBFAF5] hover:bg-paper"
+                      ? "bg-[#FBFBFD] hover:bg-paper"
                       : "bg-white hover:bg-paper",
-                isSameDay(day, selectedDate) && "shadow-[inset_0_0_0_2px_#1E4D36]"
+                isSameDay(day, selectedDate) && "shadow-[inset_0_0_0_2px_#3D2BD6]"
               )}
             >
               <span className="flex items-start justify-between gap-1">

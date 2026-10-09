@@ -1,37 +1,37 @@
 import type { Config } from "tailwindcss";
 
-// Torli brand palette: bottle green on warm paper, with lime only for "now / next".
+// Torli brand palette: blue-violet on cool paper, with lime only for "now / next".
 // Older screens were written with indigo/violet/slate class names. Those names are
 // mapped onto the brand palette below so every screen (and any new code that still
 // uses them) stays on brand. Prefer the brand / paper / ink names in new code.
 const brand = {
-  50: "#EFF4EE",
-  100: "#E1EBE2",
-  200: "#C9DCCD",
-  300: "#A3C2AB",
-  400: "#5E8F6C",
-  500: "#2F6B4B",
-  600: "#1E4D36",
-  700: "#163B29",
-  800: "#112E20",
-  900: "#0C2117",
-  950: "#08160F",
-  DEFAULT: "#1E4D36",
+  50: "#F2F1FE",
+  100: "#E6E4FD",
+  200: "#CDC9FB",
+  300: "#ABA3F7",
+  400: "#8072F1",
+  500: "#5A47E8",
+  600: "#3D2BD6",
+  700: "#3123B2",
+  800: "#271C8C",
+  900: "#1D1668",
+  950: "#130E45",
+  DEFAULT: "#3D2BD6",
 };
 
-// Warm neutrals: paper backgrounds, linen lines and green-black ink.
+// Cool neutrals with a violet tint: paper backgrounds, hairlines and ink.
 const ink = {
-  50: "#F4F1E8",
-  100: "#EDE9DE",
-  200: "#E2DDCF",
-  300: "#CFC8B6",
-  400: "#A3A89F",
-  500: "#6B736C",
-  600: "#4D564F",
-  700: "#3A433C",
-  800: "#242C26",
-  900: "#17201A",
-  950: "#0E140F",
+  50: "#F5F5FA",
+  100: "#EDEDF4",
+  200: "#E2E2EC",
+  300: "#CACAD9",
+  400: "#9E9EB2",
+  500: "#6C6C82",
+  600: "#4F4F64",
+  700: "#3B3B4E",
+  800: "#272736",
+  900: "#171624",
+  950: "#0E0D17",
 };
 
 const success = {
@@ -96,10 +96,10 @@ const config: Config = {
         success,
         pending,
         danger,
-        paper: { DEFAULT: "#F4F1E8", surface: "#FFFDF9", line: "#E2DDCF" },
+        paper: { DEFAULT: "#F5F5FA", surface: "#FFFFFF", line: "#E2E2EC" },
         lime: { DEFAULT: "#CFEA6E", ink: "#1A2E12", edge: "#B8D458", soft: "#EEF7CF" },
         staff: { d: "#2F6B4B", y: "#7A3B69", m: "#B4532A" },
-        white: "#FFFDF9",
+        white: "#FFFFFF",
         primary: {
           ...brand,
           DEFAULT: "var(--primary)",
@@ -126,17 +126,17 @@ const config: Config = {
         "4xl": "14px",
       },
       boxShadow: {
-        sm: "0 1px 2px rgba(23, 32, 26, 0.06)",
-        DEFAULT: "0 1px 2px rgba(23, 32, 26, 0.07)",
-        md: "0 2px 6px -2px rgba(23, 32, 26, 0.12)",
-        lg: "0 10px 24px -12px rgba(23, 32, 26, 0.2)",
-        xl: "0 16px 32px -16px rgba(23, 32, 26, 0.24)",
-        "2xl": "0 24px 48px -20px rgba(23, 32, 26, 0.3)",
-        soft: "0 1px 0 rgba(23, 32, 26, 0.04)",
-        elevated: "0 10px 24px -12px rgba(23, 32, 26, 0.2)",
+        sm: "0 1px 2px rgba(23, 22, 36, 0.06)",
+        DEFAULT: "0 1px 2px rgba(23, 22, 36, 0.07)",
+        md: "0 2px 6px -2px rgba(23, 22, 36, 0.12)",
+        lg: "0 10px 24px -12px rgba(23, 22, 36, 0.2)",
+        xl: "0 16px 32px -16px rgba(23, 22, 36, 0.24)",
+        "2xl": "0 24px 48px -20px rgba(23, 22, 36, 0.3)",
+        soft: "0 1px 0 rgba(23, 22, 36, 0.04)",
+        elevated: "0 10px 24px -12px rgba(23, 22, 36, 0.2)",
         glow: "none",
-        key: "0 3px 0 rgba(8, 22, 13, 0.42)",
-        "key-soft": "0 2px 0 #CFC8B6",
+        key: "0 3px 0 rgba(19, 14, 69, 0.5)",
+        "key-soft": "0 2px 0 #CACAD9",
       },
     },
   },

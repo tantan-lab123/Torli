@@ -340,12 +340,12 @@ export default async function HomePage() {
       </section>
 
       {/* The pain, and what Torli does about it */}
-      <section className="overflow-hidden border-t border-brand-800 bg-brand-700 text-paper">
+      <section className="overflow-hidden border-t border-brand-950 bg-brand-900 text-paper">
         <div
           className={cn(
             frame,
             pad,
-            "l-frame grid items-center gap-12 border-brand-600 py-20 [--l-cross:#5E8F6C] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20 lg:py-28"
+            "l-frame grid items-center gap-12 border-brand-600 py-20 [--l-cross:#8072F1] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20 lg:py-28"
           )}
         >
           <div>
@@ -464,7 +464,7 @@ export default async function HomePage() {
         <div className={cn(frame, pad, "l-frame py-20 lg:py-28")}>
           <div
             data-reveal=""
-            className="m-ticket grid rounded-[14px] bg-brand-600 text-paper [--notch:#F4F1E8] lg:grid-cols-[minmax(0,1fr)_auto]"
+            className="m-ticket grid rounded-[14px] bg-brand-600 text-paper [--notch:#F5F5FA] lg:grid-cols-[minmax(0,1fr)_auto]"
           >
             <div className="p-8 sm:p-12 lg:p-16">
               <h2 className="text-[36px] font-extrabold leading-[1.04] tracking-[-0.02em] text-balance sm:text-[48px] lg:text-[60px]">
