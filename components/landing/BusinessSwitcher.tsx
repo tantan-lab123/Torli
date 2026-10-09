@@ -43,9 +43,9 @@ const KINDS: Kind[] = [
     note: "תורים קצרים וצפופים, בלי חורים ביומן.",
     points: ["משך ומחיר לכל שירות", "שעות פעילות שונות לכל יום", "רשימת המתנה כשהיום מלא"],
     services: [
+      { name: "עיצוב וסידור זקן", minutes: 20, rest: 5, price: 45 },
       { name: "תספורת גברים קלאסית", minutes: 30, rest: 5, price: 80 },
-      { name: "עיצוב וסידור זקן מדויק", minutes: 20, rest: 5, price: 50 },
-      { name: "חבילת VIP: תספורת + זקן + חפיפה", minutes: 45, rest: 10, price: 120 },
+      { name: "חבילת VIP: תספורת + זקן + חפיפה", minutes: 50, rest: 10, price: 115 },
     ],
   },
   {
@@ -122,7 +122,7 @@ const KINDS: Kind[] = [
  * the same markup as the real one. Services in the phone can be tapped.
  */
 export function BusinessSwitcher({ liveDemos }: { liveDemos: string[] }) {
-  const [active, setActive] = useState(1);
+  const [active, setActive] = useState(0);
   const [picked, setPicked] = useState(0);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const kind = KINDS[active];
