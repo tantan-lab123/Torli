@@ -147,7 +147,7 @@ function SectionLabel({ n, children, dark }: { n?: string; children: React.React
   );
 }
 
-/** The hero's backdrop: a ruled diary page with hours, and a lime "now" line at the phones' 10:40. */
+/** The hero's backdrop: a ruled diary page with hours, and an accent "now" line at the phones' 10:40. */
 function DiaryPage() {
   const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
   const now = 56 + (100 / 30) * 56; // 10:40, with a 56px rule every half hour from 09:00
@@ -345,7 +345,7 @@ export default async function HomePage() {
           className={cn(
             frame,
             pad,
-            "l-frame grid items-center gap-12 border-brand-600 py-20 [--l-cross:#8072F1] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20 lg:py-28"
+            "l-frame grid items-center gap-12 border-brand-600 py-20 [--l-cross:#5C8BFF] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20 lg:py-28"
           )}
         >
           <div>
@@ -464,7 +464,7 @@ export default async function HomePage() {
         <div className={cn(frame, pad, "l-frame py-20 lg:py-28")}>
           <div
             data-reveal=""
-            className="m-ticket grid rounded-[14px] bg-brand-600 text-paper [--notch:#F5F5FA] lg:grid-cols-[minmax(0,1fr)_auto]"
+            className="m-ticket grid rounded-[14px] bg-brand-600 text-paper [--notch:#F6F7F9] lg:grid-cols-[minmax(0,1fr)_auto]"
           >
             <div className="p-8 sm:p-12 lg:p-16">
               <h2 className="text-[36px] font-extrabold leading-[1.04] tracking-[-0.02em] text-balance sm:text-[48px] lg:text-[60px]">

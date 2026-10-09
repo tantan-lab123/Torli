@@ -17,14 +17,14 @@ interface ServicesSectionProps {
   onDeleteService?: (serviceId: string) => Promise<void>;
 }
 
-// On-brand tags: brand violet, aubergine, terracotta, mustard, olive, ink.
+// On-brand tags: brand blue, aubergine, terracotta, mustard, olive, ink.
 const COLOR_OPTIONS = [
-  "#3D2BD6", // Brand violet
+  "#0D52E6", // Brand blue
   "#7A3B69", // Aubergine
   "#B4532A", // Terracotta
   "#C98A0B", // Mustard
   "#5B6B2E", // Olive
-  "#3B3B4E", // Ink
+  "#3A3F49", // Ink
 ];
 
 export const ServicesSection: React.FC<ServicesSectionProps> = ({
@@ -162,7 +162,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div
                   className="w-10 h-10 rounded-2xl text-white flex items-center justify-center font-bold flex-shrink-0 shadow-xs"
-                  style={{ backgroundColor: service.color_tag || "#3D2BD6" }}
+                  style={{ backgroundColor: service.color_tag || "#0D52E6" }}
                 >
                   <Scissors className="w-5 h-5" />
                 </div>
